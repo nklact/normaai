@@ -1,0 +1,35 @@
+# Rust build artifacts
+target/
+
+# Environment files
+.env
+.env.local
+.env.example
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Fly.io files (don't include these in the image)
+fly.toml

@@ -1,0 +1,7 @@
+  Native Apps (Perfect Solution):
+  - ✅ Android: AndroidId - survives app reinstalls, resets on factory reset
+  - ✅ iOS: identifierForVendor - survives app reinstalls
+  - ✅ Desktop: Machine UUID/Hardware ID - survives OS reinstalls
+
+  Mobile Browsers:
+  - ✅ Require registration - Smart business decision

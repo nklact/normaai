@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kontakt - Norma AI</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <a href="index.html">
+                    <img src="logo.svg" alt="Norma AI" class="logo">
+                </a>
+            </div>
+            <div class="nav-links">
+                <a href="index.html">Početna</a>
+                <a href="index.html#features">Mogućnosti</a>
+                <a href="index.html#how-it-works">Kako funkcioniše</a>
+                <a href="index.html#faq">Česta pitanja</a>
+                <a href="cene.html">Cene</a>
+                <a href="kontakt.html" class="active">Kontakt</a>
+                <a href="https://chat.normaai.rs" class="nav-cta">Probaj besplatno</a>
+            </div>
+            <div class="nav-mobile">
+                <button class="hamburger">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contact Hero Section -->
+    <section class="contact-hero">
+        <div class="container">
+            <div class="contact-hero-content">
+                <h1>Kontaktirajte nas</h1>
+                <p class="hero-subtitle">Imate pitanja o Norma AI? Tu smo da vam pomognemo. Kontaktirajte nas bilo kada.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Content -->
+    <section class="contact-content">
+        <div class="container">
+            <div class="contact-grid">
+                <!-- Contact Form -->
+                <div class="contact-form-section">
+                    <h2>Pošaljite nam poruku</h2>
+                    <form class="contact-form" id="contactForm">
+                        <div class="form-group">
+                            <label for="name">Ime i prezime *</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email adresa *</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="company">Kompanija</label>
+                            <input type="text" id="company" name="company">
+                        </div>
+                        <div class="form-group">
+                            <label for="subject">Tema *</label>
+                            <select id="subject" name="subject" required>
+                                <option value="">Izaberite temu</option>
+                                <option value="general">Opšta pitanja</option>
+                                <option value="support">Tehnička podrška</option>
+                                <option value="billing">Naplata i pretplate</option>
+                                <option value="partnership">Partnerstvo</option>
+                                <option value="media">Mediji i PR</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Poruka *</label>
+                            <textarea id="message" name="message" rows="6" required
+                                placeholder="Opišite kako vam možemo pomoći..."></textarea>
+                        </div>
+                        <button type="submit" class="btn-primary btn-large">Pošalji poruku</button>
+                    </form>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="contact-info">
+                    <h2>Informacije za kontakt</h2>
+
+                    <div class="contact-methods">
+                        <div class="contact-method">
+                            <div class="contact-icon">📧</div>
+                            <div class="contact-details">
+                                <h3>Email</h3>
+                                <p>info@normaai.rs</p>
+                                <p class="contact-note">Odgovaramo u roku od 24 sata</p>
+                            </div>
+                        </div>
+
+                        <div class="contact-method">
+                            <div class="contact-icon">💬</div>
+                            <div class="contact-details">
+                                <h3>Chat podrška</h3>
+                                <p>Dostupna svakog radnog dana</p>
+                                <p class="contact-note">Kroz glavnu aplikaciju</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Quick Links -->
+    <section class="quick-faq">
+        <div class="container">
+            <h2>Možda imate neko od ovih pitanja?</h2>
+            <div class="quick-faq-grid">
+                <a href="index.html#faq" class="faq-quick-link">
+                    <h3>Koliko košta Norma AI?</h3>
+                    <p>Saznajte o cenama i paketima →</p>
+                </a>
+                <a href="index.html#faq" class="faq-quick-link">
+                    <h3>Da li su podaci sigurni?</h3>
+                    <p>Informacije o bezbednosti →</p>
+                </a>
+                <a href="index.html#faq" class="faq-quick-link">
+                    <h3>Kako otkazati pretplatu?</h3>
+                    <p>Uslovi i procedura →</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <span>Norma AI</span>
+                    </div>
+                    <p>Vaš pouzdani pravni asistent</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-section">
+                        <h4>Proizvod</h4>
+                        <a href="index.html#features">Mogućnosti</a>
+                        <a href="index.html#how-it-works">Kako radi</a>
+                        <a href="cene.html">Cene</a>
+                    </div>
+                    <div class="footer-section">
+                        <h4>Podrška</h4>
+                        <a href="kontakt.html">Kontakt</a>
+                        <a href="index.html#faq">FAQ</a>
+                    </div>
+                    <div class="footer-section">
+                        <h4>Pravno</h4>
+                        <a href="uslovi.html">Uslovi korišćenja</a>
+                        <a href="privatnost.html">Privatnost</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Norma AI. Sva prava zadržana.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,186 @@
+#[tauri::command]
+fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+// Windows: Get machine GUID
+#[cfg(target_os = "windows")]
+fn get_system_machine_id() -> Result<String, String> {
+    use std::process::Command;
+
+    // Try to get Windows machine GUID using wmic
+    let output = Command::new("wmic")
+        .args(&["csproduct", "get", "uuid", "/format:value"])
+        .output()
+        .map_err(|e| format!("Failed to run wmic: {}", e))?;
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        for line in result.lines() {
+            if line.starts_with("UUID=") {
+                let uuid = line[5..].trim();
+                if !uuid.is_empty() && uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" {
+                    return Ok(uuid.to_string());
+                }
+            }
+        }
+    }
+
+    // Fallback: Try registry
+    get_system_hardware_uuid()
+}
+
+// macOS: Get hardware UUID
+#[cfg(target_os = "macos")]
+fn get_system_machine_id() -> Result<String, String> {
+    use std::process::Command;
+
+    let output = Command::new("system_profiler")
+        .args(&["SPHardwareDataType", "-json"])
+        .output()
+        .map_err(|e| format!("Failed to run system_profiler: {}", e))?;
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        // Parse JSON to get hardware UUID
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&result) {
+            if let Some(hardware) = json["SPHardwareDataType"].as_array().and_then(|arr| arr.first()) {
+                if let Some(uuid) = hardware["platform_UUID"].as_str() {
+                    return Ok(uuid.to_string());
+                }
+            }
+        }
+    }
+
+    // Fallback
+    get_system_hardware_uuid()
+}
+
+// Linux: Get machine ID
+#[cfg(target_os = "linux")]
+fn get_system_machine_id() -> Result<String, String> {
+    use std::fs;
+
+    // Try /etc/machine-id first
+    if let Ok(machine_id) = fs::read_to_string("/etc/machine-id") {
+        let trimmed = machine_id.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    // Fallback to /var/lib/dbus/machine-id
+    if let Ok(machine_id) = fs::read_to_string("/var/lib/dbus/machine-id") {
+        let trimmed = machine_id.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    get_system_hardware_uuid()
+}
+
+// Fallback hardware UUID method
+fn get_system_hardware_uuid() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        // Try PowerShell method for Windows
+        let output = Command::new("powershell")
+            .args(&["-Command", "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"])
+            .output()
+            .map_err(|e| format!("Failed to run PowerShell: {}", e))?;
+
+        if output.status.success() {
+            let uuid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !uuid.is_empty() && uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" {
+                return Ok(uuid);
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let output = Command::new("ioreg")
+            .args(&["-rd1", "-c", "IOPlatformExpertDevice"])
+            .output()
+            .map_err(|e| format!("Failed to run ioreg: {}", e))?;
+
+        if output.status.success() {
+            let result = String::from_utf8_lossy(&output.stdout);
+            for line in result.lines() {
+                if line.contains("IOPlatformUUID") {
+                    if let Some(start) = line.find('"').and_then(|pos| line[pos+1..].find('"').map(|p| pos + p + 1)) {
+                        if let Some(end) = line[start+1..].find('"').map(|p| start + p + 1) {
+                            return Ok(line[start+1..end].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        use std::fs;
+
+        // Try DMI product UUID
+        if let Ok(uuid) = fs::read_to_string("/sys/class/dmi/id/product_uuid") {
+            let trimmed = uuid.trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+
+        // Try dmidecode as fallback
+        if let Ok(output) = Command::new("dmidecode")
+            .args(&["-s", "system-uuid"])
+            .output()
+        {
+            if output.status.success() {
+                let uuid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !uuid.is_empty() {
+                    return Ok(uuid);
+                }
+            }
+        }
+    }
+
+    Err("Could not determine system hardware UUID".to_string())
+}
+
+// These Tauri commands are only for desktop builds (Windows/macOS/Linux desktop)
+// Mobile builds use Capacitor's Device.getId() instead
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+fn get_machine_id() -> Result<String, String> {
+    get_system_machine_id()
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+fn get_system_uuid() -> Result<String, String> {
+    get_system_hardware_uuid()
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler({
+            #[cfg(not(target_os = "android"))]
+            {
+                tauri::generate_handler![greet, get_machine_id, get_system_uuid]
+            }
+            #[cfg(target_os = "android")]
+            {
+                tauri::generate_handler![greet]
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

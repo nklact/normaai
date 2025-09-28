@@ -1,0 +1,295 @@
+.law-selector {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  --law-selector-height: auto;
+}
+
+.law-selector-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.law-selector-auth {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.law-selector-auth-m {
+  display: none;
+}
+
+.law-auth-btn {
+  padding: 6px 12px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.law-auth-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.law-auth-btn.primary {
+  background-color: var(--primary-color);
+  color: #ffffff;
+  border-color: var(--primary-color);
+}
+
+.law-auth-btn.primary:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.law-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.app-logo {
+  height: 15px;
+  width: auto;
+}
+
+/* Show appropriate logo based on theme */
+.app-logo.light-logo {
+  display: block;
+}
+
+.app-logo.dark-logo {
+  display: none;
+}
+
+[data-theme="dark"] .app-logo.light-logo {
+  display: none;
+}
+
+[data-theme="dark"] .app-logo.dark-logo {
+  display: block;
+}
+
+.mobile-menu-btn {
+  display: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.new-conversation-btn {
+  display: none;
+  background: none;
+  color: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-items: center;
+  justify-content: center;
+  width: 40x;
+  height: 40px;
+  padding: 8px;
+  margin-left: auto;
+}
+
+.law-select-container {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.law-select {
+  width: 100%;
+  padding: 8px 40px 8px 12px;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: text;
+  transition: border-color 0.2s ease;
+}
+
+.law-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgb(6 78 59 / 0.1);
+}
+
+.law-select::placeholder {
+  color: var(--text-muted);
+}
+
+.clear-button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.clear-button:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.law-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+.law-option {
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.law-option:last-child {
+  border-bottom: none;
+}
+
+.law-option:hover,
+.law-option.highlighted {
+  background-color: var(--bg-secondary);
+}
+
+.no-results {
+  padding: 12px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+}
+
+.highlight {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 1px 2px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .new-conversation-btn {
+    display: flex;
+  }
+
+  .law-selector {
+    position: fixed; /* Fixed to top on mobile */
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: auto;
+    --law-selector-height: 80px;
+  }
+
+  .law-selector-header {
+    width: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .law-selector-label {
+    font-size: var(--text-sm);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    z-index: 1;
+  }
+
+  .law-selector-auth {
+    display: none;
+  }
+
+  .law-selector-auth-m {
+    display: flex;
+    margin-left: auto;
+  }
+
+  /* Hide registration button on mobile */
+  .law-auth-btn.primary {
+    display: none;
+  }
+
+  .law-auth-btn {
+    padding: 6px 12px;
+  }
+
+  .law-select-container {
+    max-width: 100%;
+    width: 100%;
+    margin: 8px 0 0 0;
+  }
+
+  .law-select {
+    padding: 12px 35px 12px 10px; /* Better touch target */
+    font-size: var(--text-base); /* Prevent iOS zoom */
+  }
+
+  .clear-button {
+    right: 6px;
+    font-size: var(--text-sm);
+  }
+}

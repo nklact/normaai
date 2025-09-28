@@ -1,0 +1,24 @@
+Trial (keep it as it is)
+
+Individual (3,400 RSD) - For regular users | Yearly 34,000 RSD
+- 20 messages/month
+- No document upload
+- No voice input
+- No priority support
+
+Professional (6,400 RSD) - For lawyers/real estate agents | Yearly 64,000 RSD
+- Unlimited messages
+- Document upload/Document analysis
+- Voice input
+- Email Support
+
+Team (24,900 RSD ili 29,900 RSD for up to 5 users) | Yearly 249,000 RSD ili 290,000 RSD
+- Unlimited messages
+- Document upload/Document analysis
+- Voice input
+- Email Support
+- User Management
+(Need to add user management and admin user)
+
+Team with more than 5 users?
+- Contact for pricing
