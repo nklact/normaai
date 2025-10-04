@@ -43,6 +43,14 @@ jobs:
           cd src-tauri
           cargo tauri ios init --skip-targets-install
 
+      - name: Configure Xcode project for manual signing
+        run: |
+          cd src-tauri/gen/apple
+          # Set CODE_SIGN_STYLE to Manual in project settings
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' norma-ai.xcodeproj/project.pbxproj
+          # Verify the change
+          grep "CODE_SIGN_STYLE" norma-ai.xcodeproj/project.pbxproj || echo "No CODE_SIGN_STYLE found"
+
       - name: Install certificate and provisioning profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE }}
@@ -71,6 +79,15 @@ jobs:
           # Apply provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+
+          # Extract provisioning profile UUID and set it in Xcode project
+          PP_UUID=$(grep -a -A 1 "<key>UUID</key>" $PP_PATH | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:]')
+          echo "Provisioning Profile UUID: $PP_UUID"
+
+          # Update Xcode project with provisioning profile UUID
+          cd ~/work/normaai/normaai/src-tauri/gen/apple
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
+          sed -i '' "s/PROVISIONING_PROFILE = .*/PROVISIONING_PROFILE = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
 
       - name: Build iOS app for TestFlight
         run: |
