@@ -37,6 +37,9 @@
       "icons/1024x1024.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "iOS": {
+      "developmentTeam": "$APPLE_TEAM_ID"
+    }
   }
 }
