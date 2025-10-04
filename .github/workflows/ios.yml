@@ -101,14 +101,17 @@ jobs:
         run: |
           cd src-tauri/gen/apple
 
-          # Get the provisioning profile name
+          # Get the provisioning profile UUID (more reliable than name)
           PP_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
+          PP_UUID=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>UUID</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
           PP_NAME=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>Name</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
 
-          echo "Using provisioning profile: $PP_NAME"
-          echo "Using team: $APPLE_TEAM_ID"
+          echo "Provisioning Profile Name: $PP_NAME"
+          echo "Provisioning Profile UUID: $PP_UUID"
+          echo "Team ID: $APPLE_TEAM_ID"
 
           # Build and archive using xcodebuild with manual signing
+          # Use UUID instead of name for PROVISIONING_PROFILE_SPECIFIER
           xcodebuild clean archive \
             -scheme norma-ai_iOS \
             -workspace norma-ai.xcodeproj/project.xcworkspace \
@@ -118,7 +121,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_NAME"
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID"
 
           # Create ExportOptions.plist
           mkdir -p build
@@ -134,7 +137,7 @@ jobs:
               <key>provisioningProfiles</key>
               <dict>
                   <key>com.nikola.norma-ai</key>
-                  <string>$PP_NAME</string>
+                  <string>$PP_UUID</string>
               </dict>
           </dict>
           </plist>
