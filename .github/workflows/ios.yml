@@ -106,6 +106,7 @@ jobs:
 
           # Build and archive using xcodebuild with manual signing
           # Use UUID instead of name for PROVISIONING_PROFILE_SPECIFIER
+          set -o pipefail
           xcodebuild clean archive \
             -scheme norma-ai_iOS \
             -workspace norma-ai.xcodeproj/project.xcworkspace \
@@ -115,7 +116,17 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID"
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" 2>&1 | tee xcodebuild.log
+
+          echo "Build exit code: ${PIPESTATUS[0]}"
+
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "Build failed. Last 100 lines of output:"
+            tail -100 xcodebuild.log
+            echo "Searching for errors in log:"
+            grep -i "error:" xcodebuild.log | tail -20 || echo "No specific errors found"
+            exit 1
+          fi
 
           # Create ExportOptions.plist
           mkdir -p build
