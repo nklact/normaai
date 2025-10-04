@@ -90,11 +90,58 @@ jobs:
           sed -i '' "s/PROVISIONING_PROFILE = .*/PROVISIONING_PROFILE = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
 
       - name: Build iOS app for TestFlight
-        run: |
-          cd src-tauri
-          cargo tauri ios build --export-method app-store-connect
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd src-tauri
+
+          # First, let Tauri prepare the Xcode project and build Rust code
+          cargo tauri ios build --no-bundle
+
+          # Get the provisioning profile name
+          PP_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
+          PP_NAME=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>Name</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
+
+          echo "Using provisioning profile: $PP_NAME"
+          echo "Using team: $APPLE_TEAM_ID"
+
+          # Now build the IPA using xcodebuild directly with manual signing
+          cd gen/apple
+          xcodebuild clean archive \
+            -scheme norma-ai_iOS \
+            -workspace norma-ai.xcodeproj/project.xcworkspace \
+            -configuration Release \
+            -archivePath "build/norma-ai.xcarchive" \
+            -sdk iphoneos \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_NAME"
+
+          # Create ExportOptions.plist
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>$APPLE_TEAM_ID</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.nikola.norma-ai</key>
+                  <string>$PP_NAME</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          # Export the IPA
+          xcodebuild -exportArchive \
+            -archivePath "build/norma-ai.xcarchive" \
+            -exportPath "build" \
+            -exportOptionsPlist "build/ExportOptions.plist"
 
       - name: Upload to TestFlight
         env:
