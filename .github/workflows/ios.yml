@@ -89,14 +89,17 @@ jobs:
           sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
           sed -i '' "s/PROVISIONING_PROFILE = .*/PROVISIONING_PROFILE = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
 
-      - name: Build iOS app for TestFlight
+      - name: Build Rust library for iOS
+        run: |
+          cd src-tauri
+          # Build the Rust library for iOS without creating the full app bundle
+          cargo build --release --target aarch64-apple-ios --lib
+
+      - name: Build iOS app with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cd src-tauri
-
-          # First, let Tauri prepare the Xcode project and build Rust code
-          cargo tauri ios build --no-bundle
+          cd src-tauri/gen/apple
 
           # Get the provisioning profile name
           PP_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
@@ -105,8 +108,7 @@ jobs:
           echo "Using provisioning profile: $PP_NAME"
           echo "Using team: $APPLE_TEAM_ID"
 
-          # Now build the IPA using xcodebuild directly with manual signing
-          cd gen/apple
+          # Build and archive using xcodebuild with manual signing
           xcodebuild clean archive \
             -scheme norma-ai_iOS \
             -workspace norma-ai.xcodeproj/project.xcworkspace \
@@ -119,6 +121,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="$PP_NAME"
 
           # Create ExportOptions.plist
+          mkdir -p build
           cat > build/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
