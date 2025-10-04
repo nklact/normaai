@@ -80,6 +80,12 @@ fn get_system_machine_id() -> Result<String, String> {
     get_system_hardware_uuid()
 }
 
+// iOS: Not supported (mobile uses different device ID approach)
+#[cfg(target_os = "ios")]
+fn get_system_machine_id() -> Result<String, String> {
+    Err("Device ID not supported on iOS - use mobile device APIs instead".to_string())
+}
+
 // Fallback hardware UUID method
 fn get_system_hardware_uuid() -> Result<String, String> {
     #[cfg(target_os = "windows")]
@@ -154,14 +160,14 @@ fn get_system_hardware_uuid() -> Result<String, String> {
 }
 
 // These Tauri commands are only for desktop builds (Windows/macOS/Linux desktop)
-// Mobile builds use Capacitor's Device.getId() instead
-#[cfg(not(target_os = "android"))]
+// Mobile builds (Android/iOS) use native device APIs instead
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn get_machine_id() -> Result<String, String> {
     get_system_machine_id()
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn get_system_uuid() -> Result<String, String> {
     get_system_hardware_uuid()
@@ -172,11 +178,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler({
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
                 tauri::generate_handler![greet, get_machine_id, get_system_uuid]
             }
-            #[cfg(target_os = "android")]
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             {
                 tauri::generate_handler![greet]
             }
