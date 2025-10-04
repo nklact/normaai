@@ -43,29 +43,6 @@ jobs:
           cd src-tauri
           cargo tauri ios init --skip-targets-install
 
-      - name: Configure Xcode project for manual signing and Release build
-        run: |
-          cd src-tauri/gen/apple
-
-          # Set CODE_SIGN_STYLE to Manual in project settings
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' norma-ai.xcodeproj/project.pbxproj
-
-          # Configure scheme to use Release configuration for Archive action
-          # This is necessary because xcodebuild archive uses the scheme's buildConfiguration setting,
-          # not the -configuration command-line parameter
-          SCHEME_FILE="norma-ai.xcodeproj/xcshareddata/xcschemes/norma-ai_iOS.xcscheme"
-          if [ -f "$SCHEME_FILE" ]; then
-            echo "Configuring scheme for Release archive..."
-            sed -i '' 's/buildConfiguration = "debug"/buildConfiguration = "Release"/g' "$SCHEME_FILE"
-            echo "Archive configuration set to Release"
-          else
-            echo "Warning: Scheme file not found at $SCHEME_FILE"
-          fi
-
-          # Verify the changes
-          grep "CODE_SIGN_STYLE" norma-ai.xcodeproj/project.pbxproj || echo "No CODE_SIGN_STYLE found"
-          grep -A 2 "ArchiveAction" "$SCHEME_FILE" || echo "ArchiveAction not found in scheme"
-
       - name: Install certificate and provisioning profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE }}
@@ -90,84 +67,37 @@ jobs:
           # Import certificate to keychain
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
           # Apply provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
 
-          # Extract provisioning profile UUID and set it in Xcode project
+          # Verify installation
           PP_UUID=$(grep -a -A 1 "<key>UUID</key>" $PP_PATH | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:]')
           echo "Provisioning Profile UUID: $PP_UUID"
+          echo "Certificate and provisioning profile installed successfully"
 
-          # Update Xcode project with provisioning profile UUID
-          cd ~/work/normaai/normaai/src-tauri/gen/apple
-          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
-          sed -i '' "s/PROVISIONING_PROFILE = .*/PROVISIONING_PROFILE = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
-
-      - name: Build iOS app with xcodebuild
+      - name: Update Tauri config with Team ID
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cd src-tauri/gen/apple
+          cd src-tauri
+          # Update tauri.conf.json with actual Team ID
+          sed -i.bak "s/\$APPLE_TEAM_ID/$APPLE_TEAM_ID/g" tauri.conf.json
+          cat tauri.conf.json | grep developmentTeam
 
-          # Get the provisioning profile UUID (more reliable than name)
-          PP_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
-          PP_UUID=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>UUID</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
-          PP_NAME=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>Name</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
+      - name: Build iOS app with Tauri CLI
+        run: |
+          cd src-tauri
 
-          echo "Provisioning Profile Name: $PP_NAME"
-          echo "Provisioning Profile UUID: $PP_UUID"
-          echo "Team ID: $APPLE_TEAM_ID"
-
-          # Build and archive using xcodebuild with manual signing
-          # Use UUID instead of name for PROVISIONING_PROFILE_SPECIFIER
-          set -o pipefail
-          xcodebuild clean archive \
-            -scheme norma-ai_iOS \
-            -workspace norma-ai.xcodeproj/project.xcworkspace \
-            -configuration Release \
-            -archivePath "build/norma-ai.xcarchive" \
-            -sdk iphoneos \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" 2>&1 | tee xcodebuild.log
-
-          echo "Build exit code: ${PIPESTATUS[0]}"
-
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "Build failed. Last 100 lines of output:"
-            tail -100 xcodebuild.log
-            echo "Searching for errors in log:"
-            grep -i "error:" xcodebuild.log | tail -20 || echo "No specific errors found"
-            exit 1
-          fi
-
-          # Create ExportOptions.plist
-          mkdir -p build
-          cat > build/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>$APPLE_TEAM_ID</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.nikola.norma-ai</key>
-                  <string>$PP_UUID</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
-
-          # Export the IPA
-          xcodebuild -exportArchive \
-            -archivePath "build/norma-ai.xcarchive" \
-            -exportPath "build" \
-            -exportOptionsPlist "build/ExportOptions.plist"
+          # Build iOS app using Tauri CLI
+          # This will:
+          # 1. Build the Rust library for iOS
+          # 2. Build the Xcode project
+          # 3. Use the provisioning profile and certificate we installed
+          # 4. Generate an IPA file
+          cargo tauri ios build --verbose
 
       - name: Upload to TestFlight
         env:
@@ -181,8 +111,8 @@ jobs:
           # Save API key to file
           echo "$APPLE_API_KEY" > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
 
-          # Find the IPA file
-          IPA_PATH=$(find src-tauri/gen/apple -name "*.ipa" -type f | head -n 1)
+          # Find the IPA file (Tauri CLI outputs to target/release/bundle/ios/)
+          IPA_PATH=$(find src-tauri/target -name "*.ipa" -type f | head -n 1)
 
           echo "Found IPA at: $IPA_PATH"
 
@@ -197,5 +127,5 @@ jobs:
         if: always()
         with:
           name: norma-ai-ios
-          path: src-tauri/gen/apple/**/*.ipa
+          path: src-tauri/target/**/*.ipa
           retention-days: 30
