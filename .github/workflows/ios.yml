@@ -89,12 +89,6 @@ jobs:
           sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
           sed -i '' "s/PROVISIONING_PROFILE = .*/PROVISIONING_PROFILE = $PP_UUID;/g" norma-ai.xcodeproj/project.pbxproj
 
-      - name: Build Rust library for iOS
-        run: |
-          cd src-tauri
-          # Build the Rust library for iOS without creating the full app bundle
-          cargo build --release --target aarch64-apple-ios --lib
-
       - name: Build iOS app with xcodebuild
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
