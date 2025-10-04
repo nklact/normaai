@@ -35,6 +35,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0"
+
       - name: Initialize iOS project (first time only)
         run: |
           cd src-tauri
