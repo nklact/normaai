@@ -68,9 +68,9 @@ jobs:
 
           # The script phase tries to run cargo tauri ios xcode-script which expects a dev server
           # Since we already built the Rust library, we'll modify the script to just exit successfully
-          # Find the Build Rust Code script in project.pbxproj and replace it with a no-op
+          # Replace the entire cargo tauri command with 'exit 0' (successful no-op)
 
-          sed -i '' 's|cargo tauri ios xcode-script|echo "Rust library already built, skipping..."|g' norma-ai.xcodeproj/project.pbxproj
+          sed -i '' 's|cargo tauri ios xcode-script|exit 0 # Rust library pre-built|g' norma-ai.xcodeproj/project.pbxproj
 
           echo "Modified Xcode project to skip Rust build script"
 
