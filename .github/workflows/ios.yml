@@ -87,6 +87,32 @@ jobs:
           sed -i.bak "s/\$APPLE_TEAM_ID/$APPLE_TEAM_ID/g" tauri.conf.json
           cat tauri.conf.json | grep developmentTeam
 
+      - name: Configure Xcode project for manual signing
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd src-tauri/gen/apple
+
+          # Get provisioning profile UUID
+          PP_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
+          PP_UUID=$(security cms -D -i "$PP_PATH" | grep -A 1 "<key>UUID</key>" | grep "<string>" | sed 's/<\/*string>//g' | tr -d '[:space:][:cntrl:]')
+
+          echo "Configuring Xcode project for manual signing..."
+          echo "Provisioning Profile UUID: $PP_UUID"
+          echo "Team ID: $APPLE_TEAM_ID"
+
+          # Set manual signing in project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' norma-ai.xcodeproj/project.pbxproj
+          sed -i '' "s/DEVELOPMENT_TEAM = \"\";/DEVELOPMENT_TEAM = \"$APPLE_TEAM_ID\";/g" norma-ai.xcodeproj/project.pbxproj
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = \"\";/PROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";/g" norma-ai.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' norma-ai.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' norma-ai.xcodeproj/project.pbxproj
+
+          # Verify changes
+          echo "Verifying Xcode configuration..."
+          grep "CODE_SIGN_STYLE" norma-ai.xcodeproj/project.pbxproj | head -5
+          grep "DEVELOPMENT_TEAM" norma-ai.xcodeproj/project.pbxproj | head -5
+
       - name: Build iOS app with Tauri CLI
         run: |
           cd src-tauri
@@ -94,7 +120,7 @@ jobs:
           # Build iOS app using Tauri CLI
           # This will:
           # 1. Build the Rust library for iOS
-          # 2. Build the Xcode project
+          # 2. Build the Xcode project with manual signing settings
           # 3. Use the provisioning profile and certificate we installed
           # 4. Generate an IPA file
           cargo tauri ios build --verbose
