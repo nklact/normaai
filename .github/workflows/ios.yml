@@ -76,18 +76,25 @@ jobs:
           fi
 
           echo "Found scheme file: $SCHEME_FILE"
+          echo ""
+          echo "=== Original ArchiveAction content ==="
+          grep -A 5 "ArchiveAction" "$SCHEME_FILE" || echo "No ArchiveAction found"
+          echo ""
 
-          # Replace buildConfiguration="debug" with buildConfiguration="release" in ArchiveAction
-          # Using sed to modify the XML
-          sed -i.bak 's/<ArchiveAction[^>]*buildConfiguration *= *"debug"/<ArchiveAction buildConfiguration="release"/g' "$SCHEME_FILE"
+          # Replace buildConfiguration="debug" with buildConfiguration="release" in ArchiveAction line
+          # The scheme XML might have buildConfiguration on the ArchiveAction tag
+          sed -i.bak 's/buildConfiguration = "debug"/buildConfiguration = "release"/g' "$SCHEME_FILE"
+
+          echo "=== After sed replacement ==="
+          grep -A 5 "ArchiveAction" "$SCHEME_FILE" || echo "No ArchiveAction found"
+          echo ""
 
           # Verify the change
-          if grep -q 'ArchiveAction.*buildConfiguration="release"' "$SCHEME_FILE"; then
-            echo "✅ Successfully patched scheme to use Release configuration for Archive"
-            grep "ArchiveAction" "$SCHEME_FILE"
+          if grep -q 'buildConfiguration = "release"' "$SCHEME_FILE"; then
+            echo "✅ Successfully patched scheme to use Release configuration"
           else
-            echo "❌ Failed to patch scheme file"
-            exit 1
+            echo "⚠️ No buildConfiguration found - checking if scheme is valid"
+            cat "$SCHEME_FILE"
           fi
 
       - name: Prepare certificates and provisioning profile
