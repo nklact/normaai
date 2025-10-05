@@ -113,6 +113,7 @@ jobs:
                   set -e
 
                   # Force production mode - this tells Tauri to embed frontend assets
+                  export TAURI_ENV_PRODUCTION=true
                   export TAURI_TRAY=false
                   export TAURI_ENV_PLATFORM=ios
                   export TAURI_ENV_FAMILY=mobile
@@ -137,7 +138,69 @@ jobs:
           project.save
           RUBY
 
+          # Patch the scheme to ensure Archive action uses Release configuration
+          ruby << 'RUBY'
+          require 'xcodeproj'
+
+          scheme_path = 'norma-ai.xcodeproj/xcshareddata/schemes/norma-ai_iOS.xcscheme'
+
+          # Create xcshareddata/schemes directory if it doesn't exist
+          FileUtils.mkdir_p('norma-ai.xcodeproj/xcshareddata/schemes')
+
+          if File.exist?(scheme_path)
+            # Parse and modify existing scheme
+            scheme = Xcodeproj::XCScheme.new(scheme_path)
+          else
+            # Create new scheme from the project
+            project = Xcodeproj::Project.open('norma-ai.xcodeproj')
+            scheme = Xcodeproj::XCScheme.new
+
+            # Find the iOS target
+            target = project.targets.find { |t| t.name == 'norma-ai_iOS' }
+
+            if target
+              # Set up build action
+              scheme.add_build_target(target)
+
+              # Set up test, launch, profile actions
+              scheme.set_launch_target(target)
+            end
+          end
+
+          # Ensure archive action uses Release configuration
+          scheme.archive_action.build_configuration = 'release'
+
+          # Also ensure other actions use appropriate configurations
+          scheme.launch_action.build_configuration = 'release'
+          scheme.profile_action.build_configuration = 'release'
+          scheme.test_action.build_configuration = 'debug'
+          scheme.analyze_action.build_configuration = 'debug'
+
+          # Save the scheme
+          scheme.save_as('norma-ai.xcodeproj', 'norma-ai_iOS', true)
+          RUBY
+
           echo "✅ Xcode build script configured for production mode with asset embedding"
+          echo "✅ Xcode scheme configured to use Release configuration for archive builds"
+
+      - name: Pre-build Rust library for iOS in release mode
+        run: |
+          cd src-tauri
+
+          echo "🔨 Pre-building Rust library for iOS (aarch64-apple-ios) in release mode..."
+
+          # Build the Rust library in release mode
+          # This ensures the library is already compiled when Xcode runs
+          cargo build --release --lib --target aarch64-apple-ios
+
+          # Verify the build succeeded
+          if [ -f "target/aarch64-apple-ios/release/libnorma_ai_lib.a" ]; then
+            echo "✅ Rust library pre-built successfully"
+            ls -lh target/aarch64-apple-ios/release/libnorma_ai_lib.a
+          else
+            echo "❌ Error: Rust library build failed"
+            exit 1
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
