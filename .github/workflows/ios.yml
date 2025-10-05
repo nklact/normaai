@@ -57,10 +57,11 @@ jobs:
           cargo build --release --target aarch64-apple-ios --lib
 
           # Copy the built library to where Xcode expects it
-          mkdir -p gen/apple/Externals/aarch64-apple-ios/release
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/aarch64-apple-ios/release/
+          # Xcode looks for libapp.a in Externals/arm64/debug (even for release builds in archive mode)
+          mkdir -p gen/apple/Externals/arm64/debug
+          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
 
-          echo "Rust library built and copied to Xcode location"
+          echo "Rust library built and copied to Xcode location as libapp.a"
 
       - name: Disable Tauri's Build Rust Code script phase
         run: |
