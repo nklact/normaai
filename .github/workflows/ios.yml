@@ -87,30 +87,45 @@ jobs:
           echo "✅ Certificate and profile prepared for Fastlane"
           echo "Profile Name: $PROFILE_NAME"
 
-      - name: Configure Xcode project for CI
+      - name: Patch Xcode build script for CI (production mode)
         run: |
           cd src-tauri/gen/apple
 
-          # 1. Disable the "Build Rust Code" script that expects a dev server
-          sed -i '' 's|cargo tauri ios xcode-script|exit 0 # Skipped in CI|g' norma-ai.xcodeproj/project.pbxproj
+          # Patch the "Build Rust Code" script to build in production mode
+          ruby << 'RUBY'
+          require 'xcodeproj'
+          project = Xcodeproj::Project.open('norma-ai.xcodeproj')
 
-          echo "✅ Xcode project configured for CI build"
+          project.targets.each do |target|
+            target.shell_script_build_phases.each do |phase|
+              if phase.name == "Build Rust Code"
+                # Replace script to build for production (uses embedded assets, not devUrl)
+                phase.shell_script = <<~'SCRIPT'
+                  set -e
+                  export PATH="$HOME/.cargo/bin:$PATH"
 
-      - name: Build Rust library
-        run: |
-          cd src-tauri
+                  # Tell Tauri this is a production build (ignore devUrl, use frontendDist)
+                  export TAURI_ENV_PRODUCTION=true
 
-          # Build Rust library (build.rs embeds frontend from dist/ automatically)
-          cargo build --release --lib --target aarch64-apple-ios
+                  cd "$SRCROOT/.."
 
-          # Copy to where Xcode expects it - BOTH debug and release folders
-          # Xcode Archive looks in debug folder even for Release configuration
-          mkdir -p gen/apple/Externals/arm64/debug
-          mkdir -p gen/apple/Externals/arm64/release
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/release/libapp.a
+                  # Build with Tauri in production mode (embeds frontend from dist/)
+                  cargo build --lib --release --target aarch64-apple-ios
 
-          echo "✅ Rust library built ($(ls -lh gen/apple/Externals/arm64/debug/libapp.a | awk '{print $5}'))"
+                  # Copy to where Xcode expects
+                  mkdir -p "$SRCROOT/Externals/arm64/debug"
+                  cp "target/aarch64-apple-ios/release/libnorma_ai_lib.a" "$SRCROOT/Externals/arm64/debug/libapp.a"
+
+                  echo "✅ Rust library built in production mode"
+                SCRIPT
+              end
+            end
+          end
+
+          project.save
+          RUBY
+
+          echo "✅ Xcode build script patched for production mode"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
