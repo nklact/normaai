@@ -1,8 +1,8 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Build and deploy iOS app to TestFlight"
-  lane :beta do
+  desc "Setup code signing for iOS build"
+  lane :setup_signing do
     # Setup CI environment (creates temporary keychain named 'fastlane_tmp_keychain')
     setup_ci if ENV['CI']
 
@@ -14,13 +14,12 @@ platform :ios do
       keychain_password: ""
     )
 
+    # Install provisioning profile
     install_provisioning_profile(
       path: ENV['PROVISIONING_PROFILE_PATH']
     )
 
-    # Update project code signing settings
-    # NOTE: Fastlane actions run from project root, so path is relative to root
-    # The build script was already patched in the GitHub Actions workflow
+    # Update project code signing settings for Tauri build
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "src-tauri/gen/apple/norma-ai.xcodeproj",
@@ -28,25 +27,13 @@ platform :ios do
       code_sign_identity: "Apple Distribution",
       profile_name: ENV['PROVISIONING_PROFILE_NAME']
     )
+  end
 
-    # Build the app
-    # NOTE: build_app is a Fastlane action, so path is relative to project root
-    # NOTE: The build script was patched BEFORE Fastlane to hardcode release mode
-    build_app(
-      workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
-      scheme: "norma-ai_iOS",
-      configuration: "Release",
-      export_method: "app-store",
-      export_options: {
-        method: "app-store",
-        provisioningProfiles: {
-          "com.nikola.norma-ai" => ENV['PROVISIONING_PROFILE_NAME']
-        }
-      }
-    )
-
+  desc "Upload iOS app to TestFlight"
+  lane :upload do
     # Upload to TestFlight
     upload_to_testflight(
+      ipa: "norma-ai.ipa",
       api_key: app_store_connect_api_key(
         key_id: ENV['APPLE_API_KEY_ID'],
         issuer_id: ENV['APPLE_API_ISSUER'],
