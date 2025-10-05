@@ -33,7 +33,10 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          npm run build
+          echo "Frontend build completed. Checking dist folder:"
+          ls -la dist/ | head -20
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2.0.0"
@@ -59,17 +62,34 @@ jobs:
 
           echo "iOS project initialized"
 
-      - name: Build Rust library for iOS
+      - name: Build Rust library for iOS with embedded frontend
         run: |
           cd src-tauri
-          cargo build --release --target aarch64-apple-ios --lib
+
+          echo "Verifying dist folder exists before build:"
+          ls -la ../dist/ | head -10
+
+          echo "Building Rust library with verbose output..."
+          # Build the library (build.rs will embed the frontend from dist/)
+          # Note: build.rs runs during compilation and embeds assets from frontendDist
+          RUST_LOG=debug cargo build --release --target aarch64-apple-ios --lib --verbose 2>&1 | grep -i "tauri\|asset\|embed" || true
+
+          # Verify the library was built
+          if [ ! -f "target/aarch64-apple-ios/release/libnorma_ai_lib.a" ]; then
+            echo "Error: Library not found!"
+            exit 1
+          fi
 
           # Copy the built library to where Xcode expects it
           # Xcode looks for libapp.a in Externals/arm64/debug (even for release builds in archive mode)
           mkdir -p gen/apple/Externals/arm64/debug
           cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
 
-          echo "Rust library built and copied to Xcode location as libapp.a"
+          echo "Rust library built with embedded frontend and copied to Xcode location"
+          echo "Library size:"
+          ls -lh gen/apple/Externals/arm64/debug/libapp.a
+
+          echo "Library should be several MB if frontend is embedded, vs ~KB if not"
 
       - name: Disable Tauri's Build Rust Code script phase
         run: |
