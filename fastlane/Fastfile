@@ -39,7 +39,7 @@ platform :ios do
       scheme.save_as('src-tauri/gen/apple/norma-ai.xcodeproj', 'norma-ai_iOS', true)
       UI.success("✅ Scheme patched to use Release configuration")
     else
-      UI.important("⚠️  Scheme file not found, will rely on xcargs to force Release")
+      UI.important("⚠️  Scheme file not found, will rely on configuration parameter")
     end
 
     # Build the app
@@ -47,7 +47,6 @@ platform :ios do
       workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
       scheme: "norma-ai_iOS",
       configuration: "Release",
-      xcargs: "-configuration Release",
       export_method: "app-store",
       export_options: {
         method: "app-store",
