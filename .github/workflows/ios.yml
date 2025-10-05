@@ -129,7 +129,8 @@ jobs:
                   fi
 
                   # Use cargo-tauri to build the library (this embeds the frontend from dist/)
-                  cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+                  # IMPORTANT: Hardcode --configuration release to bypass Xcode scheme's debug default
+                  cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration release ${FORCE_COLOR} ${ARCHS:?}
                 SCRIPT
               end
             end
@@ -138,50 +139,7 @@ jobs:
           project.save
           RUBY
 
-          # Patch the scheme to ensure Archive action uses Release configuration
-          ruby << 'RUBY'
-          require 'xcodeproj'
-
-          scheme_path = 'norma-ai.xcodeproj/xcshareddata/schemes/norma-ai_iOS.xcscheme'
-
-          # Create xcshareddata/schemes directory if it doesn't exist
-          FileUtils.mkdir_p('norma-ai.xcodeproj/xcshareddata/schemes')
-
-          if File.exist?(scheme_path)
-            # Parse and modify existing scheme
-            scheme = Xcodeproj::XCScheme.new(scheme_path)
-          else
-            # Create new scheme from the project
-            project = Xcodeproj::Project.open('norma-ai.xcodeproj')
-            scheme = Xcodeproj::XCScheme.new
-
-            # Find the iOS target
-            target = project.targets.find { |t| t.name == 'norma-ai_iOS' }
-
-            if target
-              # Set up build action
-              scheme.add_build_target(target)
-
-              # Set up test, launch, profile actions
-              scheme.set_launch_target(target)
-            end
-          end
-
-          # Ensure archive action uses Release configuration
-          scheme.archive_action.build_configuration = 'release'
-
-          # Also ensure other actions use appropriate configurations
-          scheme.launch_action.build_configuration = 'release'
-          scheme.profile_action.build_configuration = 'release'
-          scheme.test_action.build_configuration = 'debug'
-          scheme.analyze_action.build_configuration = 'debug'
-
-          # Save the scheme
-          scheme.save_as('norma-ai.xcodeproj', 'norma-ai_iOS', true)
-          RUBY
-
-          echo "✅ Xcode build script configured for production mode with asset embedding"
-          echo "✅ Xcode scheme configured to use Release configuration for archive builds"
+          echo "✅ Xcode build script patched to hardcode release configuration"
 
       - name: Pre-build Rust library for iOS in release mode
         run: |
