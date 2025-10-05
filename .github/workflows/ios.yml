@@ -62,46 +62,12 @@ jobs:
 
           echo "iOS project initialized"
 
-      - name: Build Rust library for iOS with embedded frontend
+      - name: Build iOS app with Tauri
         run: |
-          cd src-tauri
-
-          echo "Verifying dist folder exists before build:"
-          ls -la ../dist/ | head -10
-
-          echo "Building Rust library with verbose output..."
-          # Build the library (build.rs will embed the frontend from dist/)
-          # Note: build.rs runs during compilation and embeds assets from frontendDist
-          RUST_LOG=debug cargo build --release --target aarch64-apple-ios --lib --verbose 2>&1 | grep -i "tauri\|asset\|embed" || true
-
-          # Verify the library was built
-          if [ ! -f "target/aarch64-apple-ios/release/libnorma_ai_lib.a" ]; then
-            echo "Error: Library not found!"
-            exit 1
-          fi
-
-          # Copy the built library to where Xcode expects it
-          # Xcode looks for libapp.a in Externals/arm64/debug (even for release builds in archive mode)
-          mkdir -p gen/apple/Externals/arm64/debug
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
-
-          echo "Rust library built with embedded frontend and copied to Xcode location"
-          echo "Library size:"
-          ls -lh gen/apple/Externals/arm64/debug/libapp.a
-
-          echo "Library should be several MB if frontend is embedded, vs ~KB if not"
-
-      - name: Disable Tauri's Build Rust Code script phase
-        run: |
-          cd src-tauri/gen/apple
-
-          # The script phase tries to run cargo tauri ios xcode-script which expects a dev server
-          # Since we already built the Rust library, we'll modify the script to just exit successfully
-          # Replace the entire cargo tauri command with 'exit 0' (successful no-op)
-
-          sed -i '' 's|cargo tauri ios xcode-script|exit 0 # Rust library pre-built|g' norma-ai.xcodeproj/project.pbxproj
-
-          echo "Modified Xcode project to skip Rust build script"
+          echo "Building iOS app using Tauri's build system..."
+          # Use Tauri's build command which properly configures the app to use tauri://localhost/
+          # This embeds the frontend and sets up the custom protocol correctly
+          cargo tauri ios build --release
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
