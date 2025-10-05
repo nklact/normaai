@@ -27,11 +27,27 @@ platform :ios do
       profile_name: ENV['PROVISIONING_PROFILE_NAME']
     )
 
+    # Patch scheme to force Release configuration for archive builds
+    require 'xcodeproj'
+    scheme_path = 'src-tauri/gen/apple/norma-ai.xcodeproj/xcshareddata/schemes/norma-ai_iOS.xcscheme'
+
+    if File.exist?(scheme_path)
+      scheme = Xcodeproj::XCScheme.new(scheme_path)
+      scheme.archive_action.build_configuration = 'release'
+      scheme.launch_action.build_configuration = 'release'
+      scheme.profile_action.build_configuration = 'release'
+      scheme.save_as('src-tauri/gen/apple/norma-ai.xcodeproj', 'norma-ai_iOS', true)
+      UI.success("✅ Scheme patched to use Release configuration")
+    else
+      UI.important("⚠️  Scheme file not found, will rely on xcargs to force Release")
+    end
+
     # Build the app
     build_app(
       workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
       scheme: "norma-ai_iOS",
       configuration: "Release",
+      xcargs: "-configuration Release",
       export_method: "app-store",
       export_options: {
         method: "app-store",
