@@ -175,16 +175,8 @@ fn get_system_uuid() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init());
-
-    // On mobile (iOS/Android), use localhost plugin to serve assets
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        builder = builder.plugin(tauri_plugin_localhost::Builder::new(1420).build());
-    }
-
-    builder
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler({
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
