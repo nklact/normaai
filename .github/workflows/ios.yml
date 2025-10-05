@@ -62,6 +62,35 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Prepare certificates and provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_MOBILE_PROVISION }}
+        run: |
+          # Decode certificate and provisioning profile
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PROFILE_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PROFILE_PATH
+
+          # Create and unlock a temporary keychain
+          security create-keychain -p "" build.keychain
+          security import $CERTIFICATE_PATH -k ~/Library/Keychains/build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s ~/Library/Keychains/build.keychain $(security list-keychains -d user | sed s/\"//g)
+          security default-keychain -d user -s ~/Library/Keychains/build.keychain
+          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+
+          # Install provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+          UUID=$(grep -A1 UUID -a "$PROFILE_PATH" | grep -io "[-A-F0-9]\{36\}")
+          cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+
+          echo "✅ Certificate imported and provisioning profile installed successfully"
+
       - name: Build iOS app with Tauri
         run: |
           echo "Building iOS app using Tauri's build system..."
@@ -77,30 +106,6 @@ jobs:
 
       - name: Install Fastlane
         run: bundle install
-
-      - name: Prepare certificates and provisioning profile
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_MOBILE_PROVISION }}
-        run: |
-          # Decode certificate and provisioning profile
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          PROFILE_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PROFILE_PATH
-
-          # Extract provisioning profile name
-          PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" | grep -A 1 "<key>Name</key>" | grep "<string>" | sed 's/<\/*string>//g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-          # Export paths for Fastlane
-          echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $GITHUB_ENV
-          echo "PROVISIONING_PROFILE_PATH=$PROFILE_PATH" >> $GITHUB_ENV
-          echo "PROVISIONING_PROFILE_NAME=$PROFILE_NAME" >> $GITHUB_ENV
-
-          echo "Certificate and profile prepared"
-          echo "Profile Name: $PROFILE_NAME"
 
       - name: Setup App Store Connect API key
         env:
