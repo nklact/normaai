@@ -87,30 +87,20 @@ jobs:
           echo "✅ Certificate and profile prepared for Fastlane"
           echo "Profile Name: $PROFILE_NAME"
 
-      - name: Build Rust library for iOS (production mode)
-        env:
-          TAURI_ENV_PRODUCTION: true
+      - name: Verify frontend build exists
         run: |
-          cd src-tauri
+          if [ ! -d "dist" ]; then
+            echo "❌ Error: dist folder not found. Frontend must be built before iOS build."
+            exit 1
+          fi
+          echo "✅ Frontend build verified at $(pwd)/dist"
+          ls -la dist/ | head -10
 
-          # Build Rust library in production mode (embeds frontend from dist/)
-          cargo build --lib --release --target aarch64-apple-ios
-
-          # Copy library to where Xcode expects it
-          mkdir -p gen/apple/Externals/arm64/release
-          mkdir -p gen/apple/Externals/arm64/debug
-
-          # Copy to both debug and release folders (Xcode will use based on configuration)
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/release/libapp.a
-          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
-
-          echo "✅ Rust library built in production mode and copied to Xcode directories"
-
-      - name: Patch Xcode build script to skip Rust compilation
+      - name: Patch Xcode build script for production mode
         run: |
           cd src-tauri/gen/apple
 
-          # Patch the "Build Rust Code" script to just verify the library exists
+          # Patch the "Build Rust Code" script to build in production mode with embedded assets
           ruby << 'RUBY'
           require 'xcodeproj'
           project = Xcodeproj::Project.open('norma-ai.xcodeproj')
@@ -118,20 +108,27 @@ jobs:
           project.targets.each do |target|
             target.shell_script_build_phases.each do |phase|
               if phase.name == "Build Rust Code"
-                # Replace script to just verify pre-built library exists
+                # Modify script to force production build with embedded frontend
                 phase.shell_script = <<~'SCRIPT'
                   set -e
 
-                  # Library was pre-built in GitHub Actions workflow
-                  # Just verify it exists in the correct location
-                  LIB_PATH="$SRCROOT/Externals/arm64/$CONFIGURATION/libapp.a"
+                  # Force production mode - this tells Tauri to embed frontend assets
+                  export TAURI_TRAY=false
+                  export TAURI_ENV_PLATFORM=ios
+                  export TAURI_ENV_FAMILY=mobile
+                  export TAURI_ENV_ARCH=aarch64
 
-                  if [ ! -f "$LIB_PATH" ]; then
-                    echo "❌ Error: Pre-built library not found at $LIB_PATH"
+                  # Build with Tauri CLI which handles asset embedding correctly
+                  cd "$SRCROOT/../.."
+
+                  # Verify dist folder exists before building
+                  if [ ! -d "../dist" ]; then
+                    echo "❌ Error: Frontend dist folder not found at ../dist"
                     exit 1
                   fi
 
-                  echo "✅ Found pre-built Rust library at $LIB_PATH"
+                  # Use cargo-tauri to build the library (this embeds the frontend from dist/)
+                  cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
                 SCRIPT
               end
             end
@@ -140,7 +137,7 @@ jobs:
           project.save
           RUBY
 
-          echo "✅ Xcode build script patched to use pre-built library"
+          echo "✅ Xcode build script configured for production mode with asset embedding"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -168,6 +165,8 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          # Ensure Tauri CLI is available in PATH during Xcode build
+          PATH: ${{ env.PATH }}:${{ env.HOME }}/.cargo/bin
         run: bundle exec fastlane beta
 
       - name: Upload IPA as artifact
