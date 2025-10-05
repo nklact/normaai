@@ -27,9 +27,51 @@ platform :ios do
       profile_name: ENV['PROVISIONING_PROFILE_NAME']
     )
 
+    # Patch the Xcode build script to hardcode release configuration
+    # This MUST happen after update_code_signing_settings to avoid being overwritten
+    require 'xcodeproj'
+    project = Xcodeproj::Project.open('src-tauri/gen/apple/norma-ai.xcodeproj')
+
+    project.targets.each do |target|
+      target.shell_script_build_phases.each do |phase|
+        if phase.name == "Build Rust Code"
+          # Replace entire script to force production build
+          phase.shell_script = <<~'SCRIPT'
+            set -e
+
+            # Force production mode - tells Tauri to embed frontend assets
+            export TAURI_ENV_PRODUCTION=true
+            export TAURI_TRAY=false
+            export TAURI_ENV_PLATFORM=ios
+            export TAURI_ENV_FAMILY=mobile
+            export TAURI_ENV_ARCH=aarch64
+
+            cd "$SRCROOT/../.."
+
+            # Verify dist folder exists
+            if [ ! -d "../dist" ]; then
+              echo "❌ Error: Frontend dist folder not found"
+              exit 1
+            fi
+
+            # Build with hardcoded release configuration (bypasses Xcode scheme)
+            cargo tauri ios xcode-script -v \
+              --platform ${PLATFORM_DISPLAY_NAME:?} \
+              --sdk-root ${SDKROOT:?} \
+              --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" \
+              --header-search-paths "${HEADER_SEARCH_PATHS:?}" \
+              --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" \
+              --configuration release \
+              ${FORCE_COLOR} ${ARCHS:?}
+          SCRIPT
+          UI.success("✅ Patched build script to hardcode release configuration")
+        end
+      end
+    end
+
+    project.save
+
     # Build the app
-    # Note: The Xcode build script has been patched to hardcode --configuration release
-    # This bypasses the scheme's default debug configuration for archives
     build_app(
       workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
       scheme: "norma-ai_iOS",
