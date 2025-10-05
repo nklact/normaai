@@ -31,7 +31,7 @@
   --text-4xl: 36px; /* Hero text */
 
   /* Line heights */
-  --leading-xs: 0.5;
+  --leading-xs: 1;
   --leading-tight: 1.25; /* Headings */
   --leading-normal: 1.4; /* Body text */
   --leading-relaxed: 1.6; /* Comfortable reading */
@@ -88,6 +88,9 @@ svg {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* Disable tap highlight on mobile browsers */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 /* Ensure font inheritance works everywhere */

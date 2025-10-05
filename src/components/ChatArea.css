@@ -2,10 +2,18 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--law-selector-height, 54px));
+  height: calc(100dvh - var(--law-selector-height, 54px));
   background-color: var(--bg-primary);
   overflow: hidden;
   position: relative; /* Make this the positioned container for input form */
+}
+
+.chat-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0; /* Allow proper scrolling behavior */
 }
 
 .welcome-screen {
@@ -51,8 +59,8 @@
 }
 
 .question-examples {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -83,8 +91,11 @@
 .messages-wrapper {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   justify-content: center;
+  min-height: 0; /* Allow flex child to shrink below content size for proper scrolling */
+  padding-bottom: env(safe-area-inset-bottom, 0); /* Respect safe areas on mobile */
 }
 
 .messages-container {
@@ -187,8 +198,8 @@
   padding: 40px 24px 24px 24px;
   background: linear-gradient(
     to top,
-    var(--bg-primary) 50%,
-    rgba(255, 255, 255, 0.1) 100%
+    var(--bg-primary) 60%,
+    rgba(255, 255, 255, 0) 100%
   );
   z-index: 10;
   pointer-events: none; /* Allow scrolling through the gradient area */
@@ -203,7 +214,7 @@
 [data-theme="dark"] .input-form {
   background: linear-gradient(
     to top,
-    var(--bg-primary) 50%,
+    var(--bg-primary) 60%,
     rgba(24, 24, 24, 0) 100%
   );
 }
@@ -527,10 +538,10 @@
 
   /* Add extra padding when announcement bar is present */
   .announcement-bar-visible ~ .chat-area {
-    padding-top: calc(var(--law-selector-height, 65px) + 48px); /* LawSelector height + AnnouncementBar height */
+    padding-top: calc(
+      var(--law-selector-height, 65px) + 48px
+    ); /* LawSelector height + AnnouncementBar height */
   }
-}
-
 
   .welcome-screen {
     padding: 20px 0 100px 0; /* Remove horizontal padding for full-width questions */
@@ -569,6 +580,7 @@
   }
 
   .question-examples {
+    justify-content: start;
     overflow-x: auto;
     padding-bottom: 8px;
     padding-left: 16px;

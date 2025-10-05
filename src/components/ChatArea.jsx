@@ -437,64 +437,66 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
 
   return (
     <div className="chat-area">
-      {messages.length === 0 ? (
-        <div className="welcome-screen">
-          <div className="welcome-content">
-            <h1>Imate pravno pitanje?</h1>
-            <p>Vaš pravni asistent za srpsko zakonodavstvo</p>
-            <div className="example-questions">
-              <div className="question-examples">
-                <div 
-                  className="example-question clickable"
-                  onClick={() => handleExampleQuestionClick("Koja je kazna za prekršaj prelaska na crveno svetlo?")}
-                >
-                  Koja je kazna za prekršaj prelaska na crveno svetlo?
-                </div>
-                <div 
-                  className="example-question clickable"
-                  onClick={() => handleExampleQuestionClick("Koji su uslovi za zaključivanje braka u Srbiji?")}
-                >
-                  Koji su uslovi za zaključivanje braka u Srbiji?
-                </div>
-                <div 
-                  className="example-question clickable"
-                  onClick={() => handleExampleQuestionClick("Kakva je procedura za osnivanje društva sa ograničenom odgovornošću?")}
-                >
-                  Kakva je procedura za osnivanje društva sa ograničenom odgovornošću?
-                </div>
-              </div>
-            </div>
-            <p className="start-hint">
-              Postavite pitanje u polje ispod za početak
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="messages-wrapper">
-          <div className="messages-container">
-            {(
-                messages.map((message, index) => (
-                  <MessageBubble 
-                    key={index} 
-                    message={message}
-                    isUser={message.role === 'user'}
-                  />
-                ))
-              )}
-              
-              {isLoading && (
-                <div className="loading-indicator">
-                  <div className="typing-animation">
-                    <div className="dot"></div>
-                    <div className="dot"></div>
-                    <div className="dot"></div>
+      <div className="chat-content-wrapper">
+        {messages.length === 0 ? (
+          <div className="welcome-screen">
+            <div className="welcome-content">
+              <h1>Imate pravno pitanje?</h1>
+              <p>Vaš pravni asistent za srpsko zakonodavstvo</p>
+              <div className="example-questions">
+                <div className="question-examples">
+                  <div
+                    className="example-question clickable"
+                    onClick={() => handleExampleQuestionClick("Koja je kazna za prelazak na crveno svetlo?")}
+                  >
+                    Koja je kazna za prelazak na crveno svetlo?
+                  </div>
+                  <div
+                    className="example-question clickable"
+                    onClick={() => handleExampleQuestionClick("Koji su uslovi za zaključivanje braka u Srbiji?")}
+                  >
+                    Koji su uslovi za zaključivanje braka u Srbiji?
+                  </div>
+                  <div
+                    className="example-question clickable"
+                    onClick={() => handleExampleQuestionClick("Kakva je procedura za osnivanje društva sa ograničenom odgovornošću?")}
+                  >
+                    Kakva je procedura za osnivanje društva sa ograničenom odgovornošću?
                   </div>
                 </div>
-              )}
-              
+              </div>
+              <p className="start-hint">
+                Postavite pitanje u polje ispod za početak
+              </p>
             </div>
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="messages-wrapper">
+            <div className="messages-container">
+              {(
+                  messages.map((message, index) => (
+                    <MessageBubble
+                      key={index}
+                      message={message}
+                      isUser={message.role === 'user'}
+                    />
+                  ))
+                )}
+
+                {isLoading && (
+                  <div className="loading-indicator">
+                    <div className="typing-animation">
+                      <div className="dot"></div>
+                      <div className="dot"></div>
+                      <div className="dot"></div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+          </div>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="input-form">
         {/* File preview section */}
