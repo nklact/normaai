@@ -1,0 +1,50 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and deploy iOS app to TestFlight"
+  lane :beta do
+    # Setup CI environment (creates temporary keychain)
+    setup_ci if ENV['CI']
+
+    # Import certificate and provisioning profile
+    import_certificate(
+      certificate_path: ENV['CERTIFICATE_PATH'],
+      certificate_password: ENV['CERTIFICATE_PASSWORD'],
+      keychain_name: ENV['KEYCHAIN_NAME'] || 'fastlane_keychain',
+      keychain_password: ENV['KEYCHAIN_PASSWORD']
+    )
+
+    install_provisioning_profile(
+      path: ENV['PROVISIONING_PROFILE_PATH']
+    )
+
+    # Update project code signing settings
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "src-tauri/gen/apple/norma-ai.xcodeproj",
+      team_id: ENV['APPLE_TEAM_ID'],
+      code_sign_identity: "Apple Distribution",
+      profile_name: ENV['PROVISIONING_PROFILE_NAME']
+    )
+
+    # Build the app
+    build_app(
+      workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
+      scheme: "norma-ai_iOS",
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        method: "app-store",
+        provisioningProfiles: {
+          "com.nikola.norma-ai" => ENV['PROVISIONING_PROFILE_NAME']
+        }
+      }
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      api_key_path: ENV['APPLE_API_KEY_PATH'],
+      skip_waiting_for_build_processing: true
+    )
+  end
+end
