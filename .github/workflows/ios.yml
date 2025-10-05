@@ -103,11 +103,14 @@ jobs:
           # Build Rust library (build.rs embeds frontend from dist/ automatically)
           cargo build --release --lib --target aarch64-apple-ios
 
-          # Copy to where Xcode expects it for release builds
+          # Copy to where Xcode expects it - BOTH debug and release folders
+          # Xcode Archive looks in debug folder even for Release configuration
+          mkdir -p gen/apple/Externals/arm64/debug
           mkdir -p gen/apple/Externals/arm64/release
+          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/debug/libapp.a
           cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/release/libapp.a
 
-          echo "✅ Rust library built ($(ls -lh gen/apple/Externals/arm64/release/libapp.a | awk '{print $5}'))"
+          echo "✅ Rust library built ($(ls -lh gen/apple/Externals/arm64/debug/libapp.a | awk '{print $5}'))"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
