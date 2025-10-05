@@ -68,35 +68,46 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_MOBILE_PROVISION }}
         run: |
-          # Decode certificate and provisioning profile
+          # Decode certificate and provisioning profile to temp files
+          # Fastlane will handle keychain creation and import
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PROFILE_PATH=$RUNNER_TEMP/build_pp.mobileprovision
 
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PROFILE_PATH
 
-          # Create and unlock a temporary keychain
-          security create-keychain -p "" build.keychain
-          security import $CERTIFICATE_PATH -k ~/Library/Keychains/build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -d user -s ~/Library/Keychains/build.keychain $(security list-keychains -d user | sed s/\"//g)
-          security default-keychain -d user -s ~/Library/Keychains/build.keychain
-          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/build.keychain
+          # Extract provisioning profile name for Fastlane
+          PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" | grep -A 1 "<key>Name</key>" | grep "<string>" | sed 's/<\/*string>//g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-          # Install provisioning profile
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
-          UUID=$(grep -A1 UUID -a "$PROFILE_PATH" | grep -io "[-A-F0-9]\{36\}")
-          cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          # Export paths for Fastlane
+          echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $GITHUB_ENV
+          echo "PROVISIONING_PROFILE_PATH=$PROFILE_PATH" >> $GITHUB_ENV
+          echo "PROVISIONING_PROFILE_NAME=$PROFILE_NAME" >> $GITHUB_ENV
 
-          echo "✅ Certificate imported and provisioning profile installed successfully"
+          echo "✅ Certificate and profile prepared for Fastlane"
+          echo "Profile Name: $PROFILE_NAME"
 
-      - name: Build iOS app with Tauri
+      - name: Configure Xcode project for CI
         run: |
-          echo "Building iOS app using Tauri's build system..."
-          # Use Tauri's build command which properly configures the app to use tauri://localhost/
-          # This embeds the frontend and sets up the custom protocol correctly
-          cargo tauri ios build -- --release
+          cd src-tauri/gen/apple
+
+          # 1. Disable the "Build Rust Code" script that expects a dev server
+          sed -i '' 's|cargo tauri ios xcode-script|exit 0 # Skipped in CI|g' norma-ai.xcodeproj/project.pbxproj
+
+          echo "✅ Xcode project configured for CI build"
+
+      - name: Build Rust library
+        run: |
+          cd src-tauri
+
+          # Build Rust library (build.rs embeds frontend from dist/ automatically)
+          cargo build --release --lib --target aarch64-apple-ios
+
+          # Copy to where Xcode expects it for release builds
+          mkdir -p gen/apple/Externals/arm64/release
+          cp target/aarch64-apple-ios/release/libnorma_ai_lib.a gen/apple/Externals/arm64/release/libapp.a
+
+          echo "✅ Rust library built ($(ls -lh gen/apple/Externals/arm64/release/libapp.a | awk '{print $5}'))"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
