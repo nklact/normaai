@@ -23,6 +23,24 @@ dist-ssr
 *.sln
 *.sw?
 
+# Environment variables (API keys, secrets)
+.env
+.env.local
+.env.*.local
+backend/.env
+*.env
+!.env.example
+!backend/.env.example
+
 # Android signing
 *.keystore
 signing.properties
+
+# iOS certificates and keys (local only)
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.csr
+*.pem
+*_base64.txt
