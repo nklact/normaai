@@ -62,6 +62,34 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Fix Xcode scheme to use Release for Archive builds
+        run: |
+          cd src-tauri/gen/apple
+
+          # The scheme created by Tauri uses debug for archive - we need to fix this
+          # Find the scheme file (could be in xcuserdata or xcshareddata)
+          SCHEME_FILE=$(find norma-ai.xcodeproj -name "norma-ai_iOS.xcscheme" | head -1)
+
+          if [ -z "$SCHEME_FILE" ]; then
+            echo "❌ Error: Could not find scheme file"
+            exit 1
+          fi
+
+          echo "Found scheme file: $SCHEME_FILE"
+
+          # Replace buildConfiguration="debug" with buildConfiguration="release" in ArchiveAction
+          # Using sed to modify the XML
+          sed -i.bak 's/<ArchiveAction[^>]*buildConfiguration *= *"debug"/<ArchiveAction buildConfiguration="release"/g' "$SCHEME_FILE"
+
+          # Verify the change
+          if grep -q 'ArchiveAction.*buildConfiguration="release"' "$SCHEME_FILE"; then
+            echo "✅ Successfully patched scheme to use Release configuration for Archive"
+            grep "ArchiveAction" "$SCHEME_FILE"
+          else
+            echo "❌ Failed to patch scheme file"
+            exit 1
+          fi
+
       - name: Prepare certificates and provisioning profile
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE }}
