@@ -16,8 +16,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -27,7 +27,7 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
       - name: Install dependencies
         run: npm ci
@@ -67,12 +67,12 @@ jobs:
           echo "Building iOS app using Tauri's build system..."
           # Use Tauri's build command which properly configures the app to use tauri://localhost/
           # This embeds the frontend and sets up the custom protocol correctly
-          cargo tauri ios build --release
+          cargo tauri ios build -- --release
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: "3.2"
           bundler-cache: true
 
       - name: Install Fastlane
