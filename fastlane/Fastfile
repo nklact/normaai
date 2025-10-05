@@ -19,9 +19,10 @@ platform :ios do
     )
 
     # Update project code signing settings
+    # NOTE: Fastlane actions run from project root, so path is relative to root
     update_code_signing_settings(
       use_automatic_signing: false,
-      path: "../src-tauri/gen/apple/norma-ai.xcodeproj",
+      path: "src-tauri/gen/apple/norma-ai.xcodeproj",
       team_id: ENV['APPLE_TEAM_ID'],
       code_sign_identity: "Apple Distribution",
       profile_name: ENV['PROVISIONING_PROFILE_NAME']
@@ -29,6 +30,7 @@ platform :ios do
 
     # Patch the Xcode build script to hardcode release configuration
     # This MUST happen after update_code_signing_settings to avoid being overwritten
+    # NOTE: Ruby code in Fastfile runs from ./fastlane directory, so we need ../
     require 'xcodeproj'
     project = Xcodeproj::Project.open('../src-tauri/gen/apple/norma-ai.xcodeproj')
 
@@ -72,8 +74,9 @@ platform :ios do
     project.save
 
     # Build the app
+    # NOTE: build_app is a Fastlane action, so path is relative to project root
     build_app(
-      workspace: "../src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
+      workspace: "src-tauri/gen/apple/norma-ai.xcodeproj/project.xcworkspace",
       scheme: "norma-ai_iOS",
       configuration: "Release",
       export_method: "app-store",
