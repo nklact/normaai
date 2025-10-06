@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
+import "./debug.css"; // TEMPORARY - Remove after debugging
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import LawSelector from "./components/LawSelector";
