@@ -62,6 +62,35 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Create ExportOptions.plist for manual signing
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd src-tauri/gen/apple
+
+          # Create ExportOptions.plist to specify provisioning profile
+          cat > ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>ad-hoc</string>
+              <key>teamID</key>
+              <string>${APPLE_TEAM_ID}</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.nikola.norma-ai</key>
+                  <string>Norma AI App Store</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          echo "✅ Created ExportOptions.plist"
+
       - name: Setup App Store Connect API key
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
