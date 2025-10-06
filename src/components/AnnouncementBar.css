@@ -48,11 +48,8 @@
 @media (max-width: 768px) {
   .announcement-bar {
     display: flex;
-    position: fixed;
-    top: var(--law-selector-height, 65px);
-    left: 0;
-    right: 0;
-    z-index: 99; /* Below law-selector (100) but above content */
+    flex-shrink: 0; /* Don't shrink - part of flex flow */
+    /* NO position: fixed - uses natural flexbox flow */
   }
 }
 

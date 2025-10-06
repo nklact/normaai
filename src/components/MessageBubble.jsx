@@ -1,10 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Icon from './Icons';
 import './MessageBubble.css';
 
 const MessageBubble = ({ message, isUser }) => {
+  // Get initial state from localStorage, default to false (collapsed)
+  const [isReferencesExpanded, setIsReferencesExpanded] = useState(() => {
+    const saved = localStorage.getItem('norma_ai_references_expanded');
+    return saved === 'true';
+  });
+
+  // Save preference to localStorage whenever it changes
+  const handleToggleReferences = () => {
+    const newState = !isReferencesExpanded;
+    setIsReferencesExpanded(newState);
+    localStorage.setItem('norma_ai_references_expanded', newState.toString());
+  };
   // Enhanced function to render markdown text
   const renderText = (text) => {
     if (!text) return text;
@@ -80,19 +92,29 @@ const MessageBubble = ({ message, isUser }) => {
           </div>
           {quotes.length > 0 && (
             <div className="law-quotes">
-              <div className="quotes-header">
+              <div
+                className="quotes-header clickable"
+                onClick={handleToggleReferences}
+              >
                 <span className="quotes-icon">
                   <Icon name="quote" size={16} />
                 </span>
-                {message.law_name || 'Reference:'}
+                <span className="quotes-header-text">
+                  {isReferencesExpanded ? (message.law_name || 'Reference:') : 'Prikaži reference'}
+                </span>
+                <span className={`chevron-icon ${isReferencesExpanded ? 'expanded' : ''}`}>
+                  <Icon name={isReferencesExpanded ? "chevronUp" : "chevronDown"} size={16} />
+                </span>
               </div>
-              <div className="quotes-content">
-                {quotes.map((quote, index) => (
-                  <div key={index} className="quote-item">
-                    {renderText(quote.trim())}
-                  </div>
-                ))}
-              </div>
+              {isReferencesExpanded && (
+                <div className="quotes-content">
+                  {quotes.map((quote, index) => (
+                    <div key={index} className="quote-item">
+                      {renderText(quote.trim())}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -160,19 +182,29 @@ const MessageBubble = ({ message, isUser }) => {
             {renderText(cleanContent)}
           </div>
           <div className="law-quotes">
-            <div className="quotes-header">
+            <div
+              className="quotes-header clickable"
+              onClick={handleToggleReferences}
+            >
               <span className="quotes-icon">
                 <Icon name="quote" size={16} />
               </span>
-              {message.law_name || 'Reference:'}
+              <span className="quotes-header-text">
+                {isReferencesExpanded ? (message.law_name || 'Reference:') : 'Prikaži reference'}
+              </span>
+              <span className={`chevron-icon ${isReferencesExpanded ? 'expanded' : ''}`}>
+                <Icon name={isReferencesExpanded ? "chevronUp" : "chevronDown"} size={16} />
+              </span>
             </div>
-            <div className="quotes-content">
-              {extractedQuotes.map((quote, index) => (
-                <div key={index} className="quote-item">
-                  {renderText(quote)}
-                </div>
-              ))}
-            </div>
+            {isReferencesExpanded && (
+              <div className="quotes-content">
+                {extractedQuotes.map((quote, index) => (
+                  <div key={index} className="quote-item">
+                    {renderText(quote)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );

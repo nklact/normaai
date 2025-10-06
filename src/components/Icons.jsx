@@ -138,7 +138,13 @@ const Icon = ({ name, size = 16, color = 'currentColor', className = '', ...prop
         <polyline points="6,9 12,15 18,9"></polyline>
       </svg>
     ),
-    
+
+    chevronUp: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+        <polyline points="18,15 12,9 6,15"></polyline>
+      </svg>
+    ),
+
     chevronRight: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
         <polyline points="9,18 15,12 9,6"></polyline>

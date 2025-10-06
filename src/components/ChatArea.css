@@ -2,10 +2,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--law-selector-height, 54px));
   background-color: var(--bg-primary);
   overflow: hidden;
-  position: relative; /* Make this the positioned container for input form */
+  min-height: 0; /* Allow flex child to shrink */
 }
 
 .chat-content-wrapper {
@@ -95,7 +94,6 @@
   display: flex;
   justify-content: center;
   min-height: 0; /* Allow flex child to shrink below content size for proper scrolling */
-  padding-bottom: env(safe-area-inset-bottom, 0); /* Respect safe areas on mobile */
 }
 
 .messages-container {
@@ -110,7 +108,7 @@
 
 .messages-container::after {
   content: "";
-  height: 120px; /* Create space below messages for input form */
+  height: 24px; /* Small spacing at bottom */
   flex-shrink: 0;
 }
 
@@ -191,32 +189,11 @@
 }
 
 .input-form {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 40px 24px 24px 24px;
-  background: linear-gradient(
-    to top,
-    var(--bg-primary) 60%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  z-index: 10;
-  pointer-events: none; /* Allow scrolling through the gradient area */
-}
-
-.input-form .input-container,
-.input-form .file-preview,
-.input-form .input-hint {
-  pointer-events: auto; /* Re-enable interactions for actual input elements */
-}
-
-[data-theme="dark"] .input-form {
-  background: linear-gradient(
-    to top,
-    var(--bg-primary) 60%,
-    rgba(24, 24, 24, 0) 100%
-  );
+  /* NO position: absolute - uses natural flexbox flow */
+  flex-shrink: 0; /* Don't shrink when keyboard appears */
+  padding: 16px 24px 24px 24px;
+  background-color: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
 }
 
 .input-container {
@@ -527,20 +504,7 @@
 
 @media (max-width: 768px) {
   .chat-area {
-    height: 100vh;
-    height: 100dvh; /* Use dynamic viewport height on mobile */
-    padding-top: var(
-      --law-selector-height,
-      65px
-    ); /* Account for fixed header */
-    position: relative;
-  }
-
-  /* Add extra padding when announcement bar is present */
-  .announcement-bar-visible ~ .chat-area {
-    padding-top: calc(
-      var(--law-selector-height, 65px) + 48px
-    ); /* LawSelector height + AnnouncementBar height */
+    /* Natural flex sizing - no fixed heights or padding-top needed */
   }
 
   .welcome-screen {
@@ -625,7 +589,7 @@
   }
 
   .messages-container::after {
-    height: 100px; /* Smaller spacing for mobile input form */
+    height: 16px; /* Small spacing at bottom for mobile */
   }
 
   .empty-chat-content {
@@ -637,7 +601,7 @@
   }
 
   .input-form {
-    padding: 30px 16px 16px 16px; /* Smaller top padding for mobile */
+    padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
   }
 
   .message-input {

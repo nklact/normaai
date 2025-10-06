@@ -17,14 +17,17 @@ function App() {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
+  // Track pending chat creation to prevent race conditions
+  const pendingChatCreation = useRef(null);
+
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userStatus, setUserStatus] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState('login');
   const [authModalReason, setAuthModalReason] = useState(null); // Why the auth modal was opened
-  
+
   // Plan selection state
   const [planSelectionModalOpen, setPlanSelectionModalOpen] = useState(false);
 
@@ -157,72 +160,58 @@ function App() {
   };
 
   const createNewChat = async (force = false) => {
-    try {
-      console.log('🔍 DEBUG: createNewChat() called, force:', force, 'currentChatId:', currentChatId, 'messages.length:', messages.length);
-      
-      // Prevent spam: If current chat is empty, focus it instead of creating new one
-      if (!force && currentChatId && messages.length === 0) {
-        console.log('🔍 DEBUG: createNewChat() - current chat is empty, skipping creation');
-        return; // Just return, current chat is already focused
-      }
-      
-      const title = "Nova konverzacija";
-      
-      // Generate temporary ID for optimistic UI
-      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log('🔍 DEBUG: createNewChat() - generated tempId:', tempId);
-      
-      // Optimistic UI: Create chat immediately in UI
-      const optimisticChat = {
-        id: tempId,
-        title,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        isOptimistic: true // Flag to identify temporary chats
-      };
-      
-      console.log('🔍 DEBUG: createNewChat() - setting optimistic chat in UI');
-      setChats([optimisticChat, ...chats]);
-      setCurrentChatId(tempId);
-      setMessages([]);
-      
-      // Background sync with server
+    // If there's already a pending chat creation, return that promise
+    if (pendingChatCreation.current) {
+      console.log('🔍 DEBUG: createNewChat() - returning existing pending promise');
+      return pendingChatCreation.current;
+    }
+
+    // Create and store promise for this chat creation
+    pendingChatCreation.current = (async () => {
       try {
-        console.log('🔍 DEBUG: createNewChat() - calling apiService.createChat()');
+        console.log('🔍 DEBUG: createNewChat() called, force:', force, 'currentChatId:', currentChatId, 'messages.length:', messages.length);
+
+        // Prevent spam: If current chat is empty, focus it instead of creating new one
+        if (!force && currentChatId && messages.length === 0 && !currentChatId.startsWith('temp_')) {
+          console.log('🔍 DEBUG: createNewChat() - current chat is empty, skipping creation');
+          return currentChatId;
+        }
+
+        const title = "Nova konverzacija";
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Optimistic UI: Create chat immediately in UI
+        setChats([{ id: tempId, title, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), isOptimistic: true }, ...chats]);
+        setCurrentChatId(tempId);
+        setMessages([]);
+
+        // Create chat on server and get real ID
         const actualChatId = await apiService.createChat(title);
         console.log('🔍 DEBUG: createNewChat() - got actualChatId:', actualChatId);
-        
+
         // Replace optimistic chat with real one
-        setChats(prevChats => 
-          prevChats.map(chat => 
-            chat.id === tempId 
-              ? { ...chat, id: actualChatId, isOptimistic: false }
-              : chat
-          )
-        );
-        
-        // Always update current chat ID since we just created this chat
+        setChats(prevChats => prevChats.map(chat => chat.id === tempId ? { ...chat, id: actualChatId, isOptimistic: false } : chat));
         setCurrentChatId(actualChatId);
-        console.log('🔍 DEBUG: createNewChat() - completed successfully');
+
+        return actualChatId;
       } catch (error) {
-        console.error("🔍 DEBUG: Error creating chat on server:", error);
-        
-        // Remove optimistic chat on failure
-        setChats(prevChats => prevChats.filter(chat => chat.id !== tempId));
-        
-        // If this was the current chat, clear it
-        if (currentChatId === tempId) {
-          setCurrentChatId(null);
-          setMessages([]);
-        }
-        
-        // Show error to user
+        console.error("🔍 DEBUG: Error creating chat:", error);
+
+        // Rollback optimistic UI
+        setChats(prevChats => prevChats.filter(chat => !chat.isOptimistic));
+        setCurrentChatId(null);
+        setMessages([]);
+
         setErrorMessage(`Greška prilikom kreiranja konverzacije: ${error.message || error}`);
         setErrorDialogOpen(true);
+
+        return null;
+      } finally {
+        pendingChatCreation.current = null;
       }
-    } catch (error) {
-      console.error("🔍 DEBUG: Error in createNewChat:", error);
-    }
+    })();
+
+    return pendingChatCreation.current;
   };
 
   const handleDeleteChat = (chatId) => {
@@ -426,13 +415,14 @@ function App() {
       }
     }
 
-    // Ensure we have an active conversation before sending message
-    if (!currentChatId) {
-      await createNewChat();
-      // After creating new chat, retry sending the message
-      if (currentChatId) {
-        return sendMessage(request);
-      } else {
+    // Ensure we have a valid (non-temp) chat ID before sending
+    let activeChatId = currentChatId;
+
+    if (!activeChatId || activeChatId.startsWith('temp_')) {
+      console.log('🔍 No valid chat ID, creating/waiting for chat...');
+      activeChatId = await createNewChat();
+
+      if (!activeChatId) {
         setErrorMessage('Greška prilikom kreiranja konverzacije. Molimo pokušajte ponovo.');
         setErrorDialogOpen(true);
         return;
@@ -458,7 +448,7 @@ function App() {
         question,
         document_content: documentContent,
         document_filename: documentFilename,
-        chat_id: currentChatId
+        chat_id: activeChatId
         // law_name and law_url removed - will be auto-detected by backend
       };
 
@@ -466,37 +456,37 @@ function App() {
         question,
         hasDocumentContent: !!documentContent,
         documentContentLength: documentContent ? documentContent.length : 0,
-        chat_id: currentChatId
+        chat_id: activeChatId
       });
 
-      console.log("🔍 Sending message to chat:", currentChatId);
+      console.log("🔍 Sending message to chat:", activeChatId);
 
       const response = await apiService.askQuestion(requestData);
 
       // Remove optimistic flag from user message - it succeeded
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.isOptimistic && msg.content === question 
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.isOptimistic && msg.content === question
             ? { ...msg, isOptimistic: false }
             : msg
         )
       );
 
       // Reload messages to get the AI response from database
-      await loadMessages(currentChatId);
+      await loadMessages(activeChatId);
       await loadChats(); // Refresh chat list to update timestamps
-      
+
       // Update chat title with first user message if it's still default
-      const currentChat = chats.find(chat => chat.id === currentChatId);
+      const currentChat = chats.find(chat => chat.id === activeChatId);
       if (currentChat && currentChat.title === 'Nova konverzacija') {
         try {
           const newTitle = generateChatTitle(question);
-          await apiService.updateChatTitle(currentChatId, newTitle);
-          
+          await apiService.updateChatTitle(activeChatId, newTitle);
+
           // Update local state
-          setChats(prevChats => 
-            prevChats.map(chat => 
-              chat.id === currentChatId 
+          setChats(prevChats =>
+            prevChats.map(chat =>
+              chat.id === activeChatId
                 ? { ...chat, title: newTitle }
                 : chat
             )
@@ -547,10 +537,6 @@ function App() {
         setErrorMessage(`${errorMsg} Molimo registrujte se za nastavak.`);
         setErrorDialogOpen(true);
         setTimeout(() => setAuthModalOpen(true), 2000);
-      } else if (errorMsg.includes('HTTP 422') && currentChatId?.startsWith('temp_')) {
-        // Handle optimistic chat not yet created
-        setErrorMessage('Konverzacija se još kreira. Molimo sačekajte trenutak i pokušajte ponovo.');
-        setErrorDialogOpen(true);
       } else {
         setErrorMessage(`Greška prilikom slanja poruke: ${errorMsg}`);
         setErrorDialogOpen(true);

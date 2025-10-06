@@ -44,3 +44,7 @@ signing.properties
 *.csr
 *.pem
 *_base64.txt
+
+# Rust build artifacts
+backend/target/
+backend/Cargo.lock

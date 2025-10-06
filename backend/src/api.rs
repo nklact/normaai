@@ -12,7 +12,18 @@ use crate::simple_auth;
 use crate::laws;
 use sqlx::PgPool;
 
-
+// Helper function to safely find UTF-8 character boundary (stable Rust compatible)
+fn floor_char_boundary(s: &str, index: usize) -> usize {
+    if index >= s.len() {
+        s.len()
+    } else {
+        let mut idx = index;
+        while idx > 0 && !s.is_char_boundary(idx) {
+            idx -= 1;
+        }
+        idx
+    }
+}
 
 // Helper function to extract client IP from headers (for Fly.io/proxy environments)
 pub fn extract_client_ip(headers: &HeaderMap) -> String {
@@ -80,7 +91,9 @@ async fn process_question_with_free_response(
     if llm_response.len() < 200 {
         println!("🤖 LLM FREE RESPONSE: '{}'", llm_response);
     } else {
-        println!("🤖 LLM FREE RESPONSE (first 200 chars): '{}'", &llm_response[..200]);
+        // Safe UTF-8 slicing
+        let safe_end = floor_char_boundary(&llm_response, 200);
+        println!("🤖 LLM FREE RESPONSE (first 200 chars): '{}'", &llm_response[..safe_end]);
     }
 
     Ok(llm_response)
@@ -318,12 +331,18 @@ fn extract_article_from_law_text(law_content: &str, article_number: &str) -> Opt
     if let Some(start_pos) = law_content.find(&format!("Član {}", clean_article_num)) {
         let sample_start = start_pos.saturating_sub(50);
         let sample_end = (start_pos + 300).min(law_content.len());
-        let sample = &law_content[sample_start..sample_end];
+
+        // Safe UTF-8 slicing: find the nearest character boundary
+        let safe_start = floor_char_boundary(law_content, sample_start);
+        let safe_end = floor_char_boundary(law_content, sample_end);
+        let sample = &law_content[safe_start..safe_end];
+
         println!("🔍 DEBUG: Found 'Član {}' in law content. Context: '{}'", clean_article_num, sample);
     } else {
         println!("❌ DEBUG: 'Član {}' not found in law content at all", clean_article_num);
-        // Show first 200 chars to see the format
-        let sample = if law_content.len() > 200 { &law_content[..200] } else { law_content };
+        // Show first 200 chars to see the format - use char boundary safe method
+        let safe_end = floor_char_boundary(law_content, 200.min(law_content.len()));
+        let sample = &law_content[..safe_end];
         println!("🔍 DEBUG: Law content sample: '{}'", sample);
     }
 
@@ -334,7 +353,9 @@ fn extract_article_from_law_text(law_content: &str, article_number: &str) -> Opt
         let next_article_pattern = Regex::new(r"\nČlan\s+\w+").unwrap();
         let article_content = if let Some(next_match) = next_article_pattern.find(full_content) {
             // Take content up to the next article
-            &full_content[..next_match.start()]
+            // Regex match positions are always at char boundaries, but being extra safe
+            let safe_end = floor_char_boundary(full_content, next_match.start());
+            &full_content[..safe_end]
         } else {
             // Take all remaining content
             full_content

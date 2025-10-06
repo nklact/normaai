@@ -644,15 +644,18 @@
 
 @media (max-width: 768px) {
   .sidebar {
-    position: absolute;
+    position: fixed; /* Fixed for overlay */
     z-index: 1000;
     left: 0;
     top: 0;
+    bottom: 0;
     transform: translateX(-100%);
     width: 80%;
-    height: 100vh;
-    height: 100dvh; /* Use dynamic viewport height for Safari mobile */
+    height: auto; /* Auto height with top/bottom constraints */
     box-shadow: var(--shadow-lg);
+    /* Apply safe area insets for iOS notch and home indicator */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .sidebar.open {
