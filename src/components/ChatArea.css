@@ -509,10 +509,7 @@
 
   .welcome-screen {
     padding: 20px 0 100px 0; /* Remove horizontal padding for full-width questions */
-    height: calc(
-      100vh - var(--law-selector-height, 64px) - 140px
-    ); /* Account for fixed header and footer */
-    height: calc(100dvh - var(--law-selector-height, 64px) - 140px);
+    /* Let flexbox handle height naturally - no fixed height needed */
     overflow-y: auto;
   }
 
@@ -585,7 +582,7 @@
   }
 
   .messages-wrapper {
-    height: calc(100vh - 64px);
+    /* Let flexbox handle height naturally - no fixed height needed */
   }
 
   .messages-container::after {

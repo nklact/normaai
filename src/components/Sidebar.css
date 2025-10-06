@@ -4,7 +4,7 @@
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%; /* Use parent height from .app container */
   transition: width 0.3s ease, transform 0.3s ease;
 }
 
