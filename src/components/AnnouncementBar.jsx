@@ -6,16 +6,20 @@ const AnnouncementBar = () => {
   const [platform, setPlatform] = useState(null);
 
   useEffect(() => {
+    // Use build-time constant to detect Tauri builds (more reliable than window.__TAURI__)
+    const isTauriBuild = typeof __TAURI_BUILD__ !== 'undefined' && __TAURI_BUILD__;
+
+    // For Tauri builds (desktop or mobile apps), never show the announcement bar
+    if (isTauriBuild) {
+      return;
+    }
+
     const userAgent = navigator.userAgent.toLowerCase();
     const isAndroid = /android/i.test(userAgent);
     const isIOS = /iphone|ipad|ipod/i.test(userAgent);
 
-    // Check if running in Tauri app (desktop or mobile)
-    const isTauriApp = typeof window !== 'undefined' && window.__TAURI__;
-
     // Check if running in mobile app (vs mobile web browser)
-    const isInApp = isTauriApp || // Tauri app (desktop or mobile)
-                    window.navigator.standalone || // iOS PWA/app
+    const isInApp = window.navigator.standalone || // iOS PWA/app
                     window.matchMedia('(display-mode: standalone)').matches || // Android PWA/app
                     document.referrer.includes('android-app://') || // Android app webview
                     /wv/i.test(userAgent); // Android webview

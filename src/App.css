@@ -108,6 +108,11 @@ body {
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   overflow: hidden;
+  /* Global safe area insets for iOS notch, home indicator, etc. */
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
 }
 
 /* Force font inheritance for all interactive elements */
@@ -121,6 +126,7 @@ select {
 .app {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height */
   width: 100%;
   position: relative;
   overflow: hidden;
