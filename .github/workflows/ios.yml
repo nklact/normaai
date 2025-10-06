@@ -135,5 +135,5 @@ jobs:
         if: always()
         with:
           name: norma-ai-ios
-          path: "*.ipa"
+          path: "src-tauri/gen/apple/build/arm64/*.ipa"
           retention-days: 30
