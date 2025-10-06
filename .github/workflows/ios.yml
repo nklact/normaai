@@ -62,34 +62,33 @@ jobs:
 
           echo "iOS project initialized"
 
-      - name: Create ExportOptions.plist for manual signing
+      - name: Configure Xcode project for manual code signing
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cd src-tauri/gen/apple
 
-          # Create ExportOptions.plist to specify provisioning profile
-          cat > ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>ad-hoc</string>
-              <key>teamID</key>
-              <string>${APPLE_TEAM_ID}</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.nikola.norma-ai</key>
-                  <string>Norma AI App Store</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          # Install xcodeproj gem to modify Xcode project
+          gem install xcodeproj
 
-          echo "✅ Created ExportOptions.plist"
+          # Switch to manual code signing and configure profile
+          ruby << 'RUBY'
+          require 'xcodeproj'
+          project = Xcodeproj::Project.open('norma-ai.xcodeproj')
+
+          project.targets.each do |target|
+            target.build_configurations.each do |config|
+              # Switch to manual code signing
+              config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+              config.build_settings['DEVELOPMENT_TEAM'] = ENV['APPLE_TEAM_ID']
+              config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = 'Norma AI App Store'
+              config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+            end
+          end
+
+          project.save
+          puts "✅ Xcode project configured for manual code signing"
+          RUBY
 
       - name: Setup App Store Connect API key
         env:
