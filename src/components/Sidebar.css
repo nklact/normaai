@@ -651,7 +651,6 @@
     bottom: 0;
     transform: translateX(-100%);
     width: 80%;
-    height: auto; /* Auto height with top/bottom constraints */
     box-shadow: var(--shadow-lg);
     /* Apply safe area insets for iOS notch and home indicator */
     padding-top: env(safe-area-inset-top);

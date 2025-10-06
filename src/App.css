@@ -128,7 +128,6 @@ select {
   /* Global safe area insets for iOS notch, home indicator, etc. */
   padding-top: env(safe-area-inset-top);
   padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
 }
 

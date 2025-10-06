@@ -36,8 +36,8 @@ export default defineConfig(async () => ({
   },
   define: {
     // Define build target for conditional compilation
-    __TAURI_BUILD__: JSON.stringify(!!process.env.TAURI_PLATFORM),
+    __TAURI_BUILD__: JSON.stringify(!!process.env.TAURI_ENV_PLATFORM),
     __CAPACITOR_BUILD__: JSON.stringify(!!process.env.CAPACITOR_PLATFORM),
-    __WEB_BUILD__: JSON.stringify(!process.env.TAURI_PLATFORM && !process.env.CAPACITOR_PLATFORM)
+    __WEB_BUILD__: JSON.stringify(!process.env.TAURI_ENV_PLATFORM && !process.env.CAPACITOR_PLATFORM)
   }
 }));
