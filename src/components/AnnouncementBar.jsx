@@ -10,8 +10,12 @@ const AnnouncementBar = () => {
     const isAndroid = /android/i.test(userAgent);
     const isIOS = /iphone|ipad|ipod/i.test(userAgent);
 
+    // Check if running in Tauri app (desktop or mobile)
+    const isTauriApp = typeof window !== 'undefined' && window.__TAURI__;
+
     // Check if running in mobile app (vs mobile web browser)
-    const isInApp = window.navigator.standalone || // iOS PWA/app
+    const isInApp = isTauriApp || // Tauri app (desktop or mobile)
+                    window.navigator.standalone || // iOS PWA/app
                     window.matchMedia('(display-mode: standalone)').matches || // Android PWA/app
                     document.referrer.includes('android-app://') || // Android app webview
                     /wv/i.test(userAgent); // Android webview
