@@ -106,7 +106,7 @@ jobs:
           IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
         run: |
           cd src-tauri
-          cargo tauri ios build --export-method release-testing --verbose
+          cargo tauri ios build --export-method app-store-connect --verbose
 
       - name: Upload to TestFlight
         env:
