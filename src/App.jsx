@@ -172,7 +172,7 @@ function App() {
         console.log('🔍 DEBUG: createNewChat() called, force:', force, 'currentChatId:', currentChatId, 'messages.length:', messages.length);
 
         // Prevent spam: If current chat is empty, focus it instead of creating new one
-        if (!force && currentChatId && messages.length === 0 && !currentChatId.startsWith('temp_')) {
+        if (!force && currentChatId && messages.length === 0 && !(typeof currentChatId === 'string' && currentChatId.startsWith('temp_'))) {
           console.log('🔍 DEBUG: createNewChat() - current chat is empty, skipping creation');
           return currentChatId;
         }
@@ -418,7 +418,7 @@ function App() {
     // Ensure we have a valid (non-temp) chat ID before sending
     let activeChatId = currentChatId;
 
-    if (!activeChatId || activeChatId.startsWith('temp_')) {
+    if (!activeChatId || (typeof activeChatId === 'string' && activeChatId.startsWith('temp_'))) {
       console.log('🔍 No valid chat ID, creating/waiting for chat...');
       activeChatId = await createNewChat();
 

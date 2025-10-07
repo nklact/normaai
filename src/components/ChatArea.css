@@ -603,6 +603,14 @@
     padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
   }
 
+  /* iOS-specific: Remove manual bottom padding, rely on safe-area-inset-bottom */
+  /* Uses max() to ensure minimum 8px padding even on old iOS devices without notch */
+  @supports (-webkit-touch-callout: none) {
+    .input-form {
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
+  }
+
   .message-input {
     font-size: var(--text-base); /* Prevent iOS zoom */
     padding: 14px 72px 14px 48px; /* Adjust for file on left, microphone and send on right for mobile */

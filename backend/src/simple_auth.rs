@@ -1202,9 +1202,18 @@ pub async fn start_trial_handler(
     );
 
     // Insert unregistered trial user with 5 total messages
+    // ON CONFLICT: If user was deleted but device_fingerprint exists, resurrect the record
     sqlx::query(
         "INSERT INTO users (email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-         VALUES ($1, '$2b$12$placeholder.hash.for.unregistered.users', 'trial_unregistered', $2, NOW(), $3, 5)"
+         VALUES ($1, '$2b$12$placeholder.hash.for.unregistered.users', 'trial_unregistered', $2, NOW(), $3, 5)
+         ON CONFLICT (email) DO UPDATE SET
+           device_fingerprint = EXCLUDED.device_fingerprint,
+           trial_started_at = NOW(),
+           trial_expires_at = EXCLUDED.trial_expires_at,
+           trial_messages_remaining = 5,
+           account_type = 'trial_unregistered',
+           account_status = 'active',
+           updated_at = NOW()"
     )
     .bind(&trial_email)
     .bind(&request.device_fingerprint)
