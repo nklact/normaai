@@ -259,6 +259,7 @@ pub struct UserStatusResponse {
     pub subscription_expires_at: Option<chrono::DateTime<chrono::Utc>>, // Alias for frontend compatibility
     pub messages_used_today: i32, // Deprecated, always 0
     pub messages_remaining: Option<i32>, // None for premium (unlimited)
+    pub total_messages_sent: i32, // Total number of user messages ever sent (for UI hints)
     // New subscription details
     pub subscription_type: Option<String>, // "monthly", "yearly"
     pub subscription_started_at: Option<chrono::DateTime<chrono::Utc>>,

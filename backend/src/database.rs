@@ -97,6 +97,33 @@ pub async fn get_user_status_optimized(
             (access_type, messages_remaining)
         };
 
+        // Count total messages sent by this user (for UI hints)
+        let total_messages_sent: i32 = if let Some(uid) = user_id {
+            // Registered user: count by user_id
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM messages m
+                 JOIN chats c ON m.chat_id = c.id
+                 WHERE c.user_id = $1 AND m.role = 'user'"
+            )
+            .bind(uid)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0) as i32
+        } else if let Some(ref device_fp) = device_fingerprint {
+            // Trial user: count by device_fingerprint
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM messages m
+                 JOIN chats c ON m.chat_id = c.id
+                 WHERE c.device_fingerprint = $1 AND m.role = 'user'"
+            )
+            .bind(device_fp)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0) as i32
+        } else {
+            0
+        };
+
         Ok(UserStatusResponse {
             is_authenticated: user_id.is_some() && user.is_registered(), // Only authenticated if logged in
             user_id: user_id, // Only expose user_id if logged in
@@ -124,6 +151,7 @@ pub async fn get_user_status_optimized(
             },
             messages_used_today: 0, // Not used anymore
             messages_remaining,
+            total_messages_sent,
             // Include subscription fields only when logged in
             subscription_type: if user_id.is_some() {
                 user.subscription_type
@@ -159,6 +187,7 @@ pub async fn get_user_status_optimized(
             subscription_expires_at: None, // Alias for frontend
             messages_used_today: 0,        // Not used
             messages_remaining: None,      // No trial started yet
+            total_messages_sent: 0,        // No messages sent yet
             // No subscription data for unregistered users
             subscription_type: None,
             subscription_started_at: None,

@@ -598,7 +598,6 @@ function App() {
             onOpenPlanSelection={handleOpenPlanSelection}
             onOpenAuthModal={() => setAuthModalOpen(true)}
             isAuthenticated={isAuthenticated}
-            chats={chats}
           />
         </div>
         

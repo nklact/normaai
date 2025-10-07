@@ -4,7 +4,7 @@ import Icon from './Icons';
 import './ChatArea.css';
 import { extractTextFromFile, processExtractedText, isFileTypeSupported, isFileSizeValid, formatFileSize, getFileTypeDisplayName } from '../utils/fileTextExtractor';
 
-const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated, chats }) => {
+const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -616,7 +616,7 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
           </div>
         </div>
         <div className="input-hint">
-          {(chats && chats.length === 0 && messages.length === 0) ? (
+          {(userStatus && userStatus.total_messages_sent === 0) ? (
             <>
               Korišćenjem Norma AI slažete se sa našim{' '}
               <a href="https://normaai.rs/uslovi.html" target="_blank" rel="noopener noreferrer">
