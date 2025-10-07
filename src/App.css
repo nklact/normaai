@@ -101,8 +101,8 @@ svg {
 }
 
 html, body {
+  width: 100vw;
   height: 100vh;
-  height: -webkit-fill-available; /* iOS Safari viewport fix */
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -120,6 +120,7 @@ body {
 
 #root {
   height: 100%;
+  width: 100%;
   overflow: auto;
 }
 
