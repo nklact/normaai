@@ -29,7 +29,6 @@
   text-align: center;
   max-width: 600px;
   width: 100%;
-  min-height: calc(100% + 1px); /* Create scrollable space for bounce effect even when content fits */
 }
 
 .welcome-content h1 {
