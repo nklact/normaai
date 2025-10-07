@@ -100,15 +100,11 @@ svg {
   font-family: inherit;
 }
 
-html {
-  height: 100vh; /* Fallback for older browsers */
-  height: -webkit-fill-available; /* iOS Safari fix */
-  height: 100dvh; /* Modern browsers */
-}
-
-body, #root {
-  height: 100%;
-  width: 100%;
+html, body {
+  height: 100vh;
+  height: -webkit-fill-available; /* iOS Safari viewport fix */
+  margin: 0;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -121,6 +117,15 @@ body {
   line-height: var(--leading-normal);
 }
 
+#root {
+  position: fixed; /* Critical for iOS viewport bug fix */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+}
+
 /* Force font inheritance for all interactive elements */
 button,
 input,
@@ -131,15 +136,14 @@ select {
 
 .app {
   display: flex;
-  height: 100vh; /* Fallback for older browsers */
-  height: -webkit-fill-available; /* iOS Safari fix for viewport height bug */
-  height: 100dvh; /* Modern browsers - dynamic viewport height */
+  height: 100%; /* Inherit from fixed #root */
   width: 100%;
   position: relative;
   overflow: hidden;
   /* Global safe area insets for iOS notch, home indicator, etc. */
   padding-top: env(safe-area-inset-top);
   padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
 }
 
@@ -351,12 +355,6 @@ textarea:focus {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .app {
-    height: 100vh; /* Fallback for older browsers */
-    height: -webkit-fill-available; /* iOS Safari fix for viewport height bug */
-    height: 100dvh; /* Modern browsers - dynamic viewport height */
-  }
-
   .mobile-overlay.open {
     display: block;
   }
