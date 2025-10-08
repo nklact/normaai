@@ -651,11 +651,10 @@
     top: 0;
     bottom: 0;
     transform: translateX(-100%);
-    width: 80%;
+    width: 82%;
     box-shadow: var(--shadow-lg);
-    /* Apply safe area insets for iOS notch and home indicator */
+    /* Apply safe area insets for iOS notch (global .app handles bottom) */
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .sidebar.open {

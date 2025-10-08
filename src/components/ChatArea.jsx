@@ -541,6 +541,35 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
           </div>
         )}
 
+        {/* Feature action buttons */}
+        <div className="feature-actions">
+          <button
+            type="button"
+            onClick={handleFileUploadClick}
+            className="feature-action-btn"
+            title={isPremiumUser() ? "Upload dokument" : "Upload fajlova - dostupno za Professional i Team planove"}
+            disabled={isLoading || fileProcessing || isRecording || isProcessingAudio}
+          >
+            <div className="chat-feature-icon">
+              <Icon name="paperclip" size={16} />
+            </div>
+            <span className="feature-label">Upload</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTemplateLibraryOpen(true)}
+            className="feature-action-btn"
+            title="Ugovori i Obrasci"
+            disabled={isLoading || fileProcessing}
+          >
+            <div className="chat-feature-icon">
+              <Icon name="folder" size={16} />
+            </div>
+            <span className="feature-label">Ugovori i Obrasci</span>
+          </button>
+        </div>
+
         <div className="input-container">
           {/* Hidden file input */}
           <input
@@ -607,35 +636,6 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
               </span>
             </button>
           </div>
-        </div>
-
-        {/* Feature action buttons */}
-        <div className="feature-actions">
-          <button
-            type="button"
-            onClick={handleFileUploadClick}
-            className="feature-action-btn"
-            title={isPremiumUser() ? "Upload dokument" : "Upload fajlova - dostupno za Professional i Team planove"}
-            disabled={isLoading || fileProcessing || isRecording || isProcessingAudio}
-          >
-            <div className="chat-feature-icon">
-              <Icon name="paperclip" size={16} />
-            </div>
-            <span className="feature-label">Upload</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTemplateLibraryOpen(true)}
-            className="feature-action-btn"
-            title="Ugovori i Obrasci"
-            disabled={isLoading || fileProcessing}
-          >
-            <div className="chat-feature-icon">
-              <Icon name="folder" size={16} />
-            </div>
-            <span className="feature-label">Ugovori i Obrasci</span>
-          </button>
         </div>
 
         <div className="input-hint">

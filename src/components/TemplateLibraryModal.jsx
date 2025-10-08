@@ -6,7 +6,7 @@ import './TemplateLibraryModal.css';
 const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, onOpenPlanSelection, isAuthenticated }) => {
   const [categories, setCategories] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,11 +24,6 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
       const data = await response.json();
       setCategories(data.categories || []);
       setTemplates(data.templates || []);
-
-      // Auto-select first category if none selected
-      if (!selectedCategory && data.categories.length > 0) {
-        setSelectedCategory(data.categories[0].id);
-      }
     } catch (error) {
       console.error('Error loading templates:', error);
     } finally {
@@ -41,27 +36,50 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
     return userStatus && ['individual', 'professional', 'team', 'premium'].includes(userStatus.access_type);
   };
 
-  // Filter templates by category and search query
-  const getFilteredTemplates = () => {
-    let filtered = templates;
-
-    // Filter by selected category
-    if (selectedCategory) {
-      filtered = filtered.filter(t => t.category === selectedCategory);
-    }
-
-    // Filter by search query (search in template names and category names)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(t => {
-        const templateName = t.name.toLowerCase();
-        const categoryName = categories.find(c => c.id === t.category)?.name.toLowerCase() || '';
-        return templateName.includes(query) || categoryName.includes(query);
-      });
-    }
-
-    return filtered;
+  // Toggle category expansion
+  const toggleCategory = (categoryId) => {
+    setExpandedCategories(prev =>
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
   };
+
+  // Group templates by category with search filtering
+  const getGroupedTemplates = () => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return categories.map(category => {
+      let categoryTemplates = templates.filter(t => t.category === category.id);
+
+      // Apply search filter
+      if (query) {
+        categoryTemplates = categoryTemplates.filter(t => {
+          const templateName = t.name.toLowerCase();
+          const categoryName = category.name.toLowerCase();
+          return templateName.includes(query) || categoryName.includes(query);
+        });
+      }
+
+      return {
+        ...category,
+        templates: categoryTemplates,
+        hasResults: categoryTemplates.length > 0
+      };
+    }).filter(category => category.hasResults);
+  };
+
+  const groupedTemplates = getGroupedTemplates();
+
+  // Auto-expand categories with search results
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const categoriesWithResults = groupedTemplates.map(g => g.id);
+      setExpandedCategories(categoriesWithResults);
+    } else {
+      setExpandedCategories([]);
+    }
+  }, [searchQuery, templates]);
 
   const handleDownload = (template) => {
     // Check if user has required plan
@@ -88,8 +106,6 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
     document.body.removeChild(link);
   };
 
-  const filteredTemplates = getFilteredTemplates();
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Ugovori i Obrasci" type="template-library">
       <div className="template-library-content">
@@ -98,57 +114,66 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
           <Icon name="search" size={18} />
           <input
             type="text"
-            placeholder="Pretraži dokumente..."
+            placeholder="Pretraži sve dokumente..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="template-search-input"
           />
         </div>
 
-        {/* Category tabs */}
-        <div className="template-categories">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              className={`category-tab ${selectedCategory === category.id ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(category.id)}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Templates list */}
-        <div className="templates-list">
+        {/* Accordion-style categories */}
+        <div className="template-accordion">
           {isLoading ? (
             <div className="templates-loading">
               <div className="loading-spinner"></div>
               <p>Učitavanje dokumenata...</p>
             </div>
-          ) : filteredTemplates.length > 0 ? (
-            filteredTemplates.map((template) => (
-              <div key={template.id} className="template-item">
-                <div className="template-info">
-                  <div className="template-icon">📄</div>
-                  <div className="template-details">
-                    <h4 className="template-name">{template.name}</h4>
-                    {template.description && (
-                      <p className="template-description">{template.description}</p>
-                    )}
-                  </div>
-                </div>
+          ) : groupedTemplates.length > 0 ? (
+            groupedTemplates.map((category) => (
+              <div key={category.id} className="category-section">
                 <button
-                  className="template-download-btn"
-                  onClick={() => handleDownload(template)}
-                  title={hasRequiredPlan() ? "Preuzmi dokument" : "Potreban je Individual plan ili viši"}
+                  className="category-header"
+                  onClick={() => toggleCategory(category.id)}
                 >
-                  <Icon name="download" size={18} />
+                  <div className="category-header-content">
+                    <span className="category-name">{category.name}</span>
+                    <span className="category-count">({category.templates.length})</span>
+                  </div>
+                  <Icon
+                    name={expandedCategories.includes(category.id) ? "chevronUp" : "chevronDown"}
+                    size={18}
+                  />
                 </button>
+
+                {expandedCategories.includes(category.id) && (
+                  <div className="category-templates">
+                    {category.templates.map((template) => (
+                      <div key={template.id} className="template-item">
+                        <div className="template-info">
+                          <div className="template-icon">📄</div>
+                          <div className="template-details">
+                            <h4 className="template-name">{template.name}</h4>
+                            {template.description && (
+                              <p className="template-description">{template.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          className="template-download-btn"
+                          onClick={() => handleDownload(template)}
+                          title={hasRequiredPlan() ? "Preuzmi dokument" : "Potreban je Individual plan ili viši"}
+                        >
+                          <Icon name="download" size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           ) : (
             <div className="templates-empty">
-              <p>Trenutno nema dokumenata u ovoj kategoriji</p>
+              <p>Nema rezultata pretrage</p>
             </div>
           )}
         </div>
