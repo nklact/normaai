@@ -193,7 +193,7 @@
 .input-form {
   /* NO position: absolute - uses natural flexbox flow */
   flex-shrink: 0; /* Don't shrink when keyboard appears */
-  padding: 16px 24px 24px 24px;
+  padding: 12px 24px 24px 24px;
   background-color: var(--bg-primary);
 }
 
@@ -658,7 +658,7 @@
     padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
   }
 
-  /* Tauri iOS app ONLY: Fixed 8px padding (same whether keyboard is open or closed) */
+  /* Tauri iOS app ONLY */
   .tauri-ios .input-form {
     padding-bottom: 0;
   }

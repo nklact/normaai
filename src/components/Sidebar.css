@@ -657,6 +657,10 @@
     padding-top: env(safe-area-inset-top);
   }
 
+  .tauri-ios .sidebar {
+    padding-bottom: 24px;
+  }
+
   .sidebar.open {
     transform: translateX(0);
   }

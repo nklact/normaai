@@ -97,6 +97,7 @@
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
+  color: var(--text-primary); /* Fix iOS WKWebView blue default */
 }
 
 .category-header:hover {
@@ -140,6 +141,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .template-item:hover {
@@ -167,7 +169,6 @@
 }
 
 .template-name {
-  margin: 0 0 4px 0;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
@@ -188,20 +189,20 @@
 
 .template-download-btn {
   padding: 10px;
-  background-color: var(--text-primary);
-  color: white;
+  background-color: transparent;
+  color: var(--text-primary);
   border: none;
   border-radius: 8px;
-  cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  pointer-events: none; /* Icon is decorative, parent handles clicks */
 }
 
 .template-download-btn:hover {
-  background-color: var(--primary-color);
+  background-color: var(--bg-secondary);
 }
 
 .template-download-btn:active {

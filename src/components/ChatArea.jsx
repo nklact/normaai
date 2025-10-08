@@ -25,45 +25,45 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
   // Template library modal state
   const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
 
-  const scrollToLastUserMessage = () => {
-    // Use longer delay for Safari mobile compatibility
+  const scrollToLatestMessage = () => {
+    // Use longer delay for Safari mobile compatibility and rendering
     setTimeout(() => {
-      const lastUserMessageIndex = messages.findLastIndex(msg => msg.role === 'user');
-      if (lastUserMessageIndex !== -1) {
-        const messagesContainer = messagesEndRef.current?.parentElement;
-        const userMessageElement = messagesContainer?.children[lastUserMessageIndex];
-        
-        if (userMessageElement && messagesContainer) {
-          // Safari mobile compatibility: use manual scroll calculation
-          const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-          const isMobile = window.innerWidth <= 768;
-          
-          if (isSafari && isMobile) {
-            // Manual scroll for Safari mobile
-            const containerRect = messagesContainer.getBoundingClientRect();
-            const elementRect = userMessageElement.getBoundingClientRect();
-            const scrollTop = messagesContainer.scrollTop + (elementRect.top - containerRect.top);
-            
-            messagesContainer.scrollTo({
-              top: scrollTop,
-              behavior: 'auto' // Safari mobile doesn't handle smooth well
-            });
-          } else {
-            // Standard scrollIntoView for other browsers
-            userMessageElement.scrollIntoView({ 
-              behavior: isMobile ? 'auto' : 'smooth',
-              block: 'start'
-            });
-          }
+      if (messages.length === 0) return;
+
+      const messagesContainer = messagesEndRef.current?.parentElement;
+      // Get the last message element (most recent user or assistant message)
+      const lastMessageElement = messagesContainer?.children[messages.length - 1];
+
+      if (lastMessageElement && messagesContainer) {
+        // Safari mobile compatibility: use manual scroll calculation
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isMobile = window.innerWidth <= 768;
+
+        if (isSafari && isMobile) {
+          // Manual scroll for Safari mobile
+          const containerRect = messagesContainer.getBoundingClientRect();
+          const elementRect = lastMessageElement.getBoundingClientRect();
+          const scrollTop = messagesContainer.scrollTop + (elementRect.top - containerRect.top);
+
+          messagesContainer.scrollTo({
+            top: scrollTop,
+            behavior: 'auto' // Safari mobile doesn't handle smooth well
+          });
+        } else {
+          // Standard scrollIntoView for other browsers - scroll to top of message
+          lastMessageElement.scrollIntoView({
+            behavior: isMobile ? 'auto' : 'smooth',
+            block: 'start'
+          });
         }
       }
     }, 200); // Longer delay for Safari mobile rendering
   };
 
   useEffect(() => {
-    // Scroll to last user message for better reading context
+    // Scroll to top of latest message (user or AI response)
     if (messages.length > 0) {
-      scrollToLastUserMessage();
+      scrollToLatestMessage();
     }
   }, [messages]);
 

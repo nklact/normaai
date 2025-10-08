@@ -266,14 +266,16 @@ fn detect_article_references_simple(text: &str) -> Vec<String> {
 }
 
 // Get cached article content from database with automatic caching
-async fn get_cached_article(law_name: &str, article_number: &str, pool: &PgPool) -> Result<Option<String>, String> {
+// Returns: (article_content, actual_law_name_from_db)
+async fn get_cached_article(law_name: &str, article_number: &str, pool: &PgPool) -> Result<Option<(String, String)>, String> {
     // Try to get from cache first
     match get_cached_law(law_name.to_string(), pool).await {
         Ok(Some(cached_law)) => {
             println!("✅ DEBUG: Found '{}' in cache", law_name);
             // Extract specific article from law content
             let article_content = extract_article_from_law_text(&cached_law.content, article_number);
-            Ok(article_content)
+            // Return both article content and the actual law name from database
+            Ok(article_content.map(|content| (content, cached_law.law_name.clone())))
         }
         Ok(None) => {
             println!("⚠️ DEBUG: Law '{}' not found in cache, attempting to fetch and cache", law_name);
@@ -288,7 +290,8 @@ async fn get_cached_article(law_name: &str, article_number: &str, pool: &PgPool)
                         println!("✅ DEBUG: Successfully fetched and cached '{}'", law_name);
                         // Now extract the specific article
                         let article_content = extract_article_from_law_text(&law_content.content, article_number);
-                        Ok(article_content)
+                        // Return both article content and the law title (which is the cached name)
+                        Ok(article_content.map(|content| (content, law_content.title.clone())))
                     }
                     Err(e) => {
                         println!("❌ DEBUG: Failed to fetch law content for '{}': {}", law_name, e);
@@ -395,12 +398,17 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
 
     let law_name = detected_law_name.unwrap();
     let mut law_quotes = Vec::new();
+    let mut actual_law_name_from_db: Option<String> = None;
 
     for article_number in article_numbers {
         match get_cached_article(law_name, &article_number, pool).await {
-            Ok(Some(article_content)) => {
+            Ok(Some((article_content, db_law_name))) => {
                 law_quotes.push(article_content);
-                println!("✅ DEBUG: Added content for Član {} from {}", article_number, law_name);
+                // Capture the actual law name from database (same for all articles)
+                if actual_law_name_from_db.is_none() {
+                    actual_law_name_from_db = Some(db_law_name.clone());
+                }
+                println!("✅ DEBUG: Added content for Član {} from {} (DB: {})", article_number, law_name, db_law_name);
             }
             Ok(None) => {
                 println!("⚠️ DEBUG: No content found for Član {} in '{}'", article_number, law_name);
@@ -414,9 +422,9 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
     println!("✅ DEBUG: Article replacement complete. Answer: {} chars, Quotes: {}",
              response.len(), law_quotes.len());
 
-    // Return the law name only if we successfully found articles
+    // Return the actual law name from database if we successfully found articles
     let actual_law_name = if !law_quotes.is_empty() {
-        Some(law_name.to_string())
+        actual_law_name_from_db
     } else {
         None
     };
@@ -695,7 +703,7 @@ async fn process_question_with_llm_guidance(
         request.chat_id,
         "assistant".to_string(),
         response_content,
-        None, // No specific law in free response mode
+        actual_law_name.clone(), // Save actual law name from database for frontend display
         None, // AI responses don't have documents
         None, // AI responses don't have filenames
         pool,

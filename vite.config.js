@@ -30,6 +30,7 @@ export default defineConfig(async () => ({
   },
   // Build configuration
   build: {
+    emptyOutDir: true, // Force empty dist on build
     rollupOptions: {
       // Dynamic imports handle platform-specific APIs, so no external configuration needed
     }

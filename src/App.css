@@ -146,6 +146,10 @@ select {
   padding-left: env(safe-area-inset-left);
 }
 
+.tauri-ios .app {
+  padding-bottom: 24px;
+}
+
 .main-content {
   flex: 1;
   display: flex;

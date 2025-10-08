@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import Icon from './Icons';
 import './TemplateLibraryModal.css';
@@ -9,6 +9,7 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
   const [expandedCategories, setExpandedCategories] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const categoryRefs = useRef({});
 
   // Load templates data on mount
   useEffect(() => {
@@ -38,11 +39,23 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
 
   // Toggle category expansion
   const toggleCategory = (categoryId) => {
-    setExpandedCategories(prev =>
-      prev.includes(categoryId)
+    setExpandedCategories(prev => {
+      const isExpanding = !prev.includes(categoryId);
+
+      // If expanding, scroll to it after state update
+      if (isExpanding) {
+        setTimeout(() => {
+          categoryRefs.current[categoryId]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+          });
+        }, 100);
+      }
+
+      return prev.includes(categoryId)
         ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    );
+        : [...prev, categoryId];
+    });
   };
 
   // Group templates by category with search filtering
@@ -130,7 +143,11 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
             </div>
           ) : groupedTemplates.length > 0 ? (
             groupedTemplates.map((category) => (
-              <div key={category.id} className="category-section">
+              <div
+                key={category.id}
+                className="category-section"
+                ref={el => categoryRefs.current[category.id] = el}
+              >
                 <button
                   className="category-header"
                   onClick={() => toggleCategory(category.id)}
@@ -148,7 +165,20 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
                 {expandedCategories.includes(category.id) && (
                   <div className="category-templates">
                     {category.templates.map((template) => (
-                      <div key={template.id} className="template-item">
+                      <div
+                        key={template.id}
+                        className="template-item"
+                        onClick={() => handleDownload(template)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleDownload(template);
+                          }
+                        }}
+                        title={hasRequiredPlan() ? "Preuzmi dokument" : "Potreban je Individual plan ili viši"}
+                      >
                         <div className="template-info">
                           <div className="template-icon">📄</div>
                           <div className="template-details">
@@ -158,13 +188,9 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
                             )}
                           </div>
                         </div>
-                        <button
-                          className="template-download-btn"
-                          onClick={() => handleDownload(template)}
-                          title={hasRequiredPlan() ? "Preuzmi dokument" : "Potreban je Individual plan ili viši"}
-                        >
+                        <div className="template-download-btn">
                           <Icon name="download" size={18} />
-                        </button>
+                        </div>
                       </div>
                     ))}
                   </div>
