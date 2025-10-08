@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 import Icon from './Icons';
+import TemplateLibraryModal from './TemplateLibraryModal';
 import './ChatArea.css';
 import { extractTextFromFile, processExtractedText, isFileTypeSupported, isFileSizeValid, formatFileSize, getFileTypeDisplayName } from '../utils/fileTextExtractor';
 
@@ -20,6 +21,9 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+
+  // Template library modal state
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
 
   const scrollToLastUserMessage = () => {
     // Use longer delay for Safari mobile compatibility
@@ -548,17 +552,6 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
           />
 
           <div className="message-input-wrapper">
-            {/* File upload button inside input */}
-            <button
-              type="button"
-              onClick={handleFileUploadClick}
-              className="file-upload-btn-inline"
-              title={isPremiumUser() ? "Upload dokument" : "Upload fajlova - dostupno za Professional i Team planove"}
-              disabled={isLoading || fileProcessing || isRecording || isProcessingAudio}
-            >
-              <Icon name="paperclip" size={18} />
-            </button>
-
             <textarea
               ref={textareaRef}
               value={inputValue}
@@ -615,6 +608,36 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
             </button>
           </div>
         </div>
+
+        {/* Feature action buttons */}
+        <div className="feature-actions">
+          <button
+            type="button"
+            onClick={handleFileUploadClick}
+            className="feature-action-btn"
+            title={isPremiumUser() ? "Upload dokument" : "Upload fajlova - dostupno za Professional i Team planove"}
+            disabled={isLoading || fileProcessing || isRecording || isProcessingAudio}
+          >
+            <div className="chat-feature-icon">
+              <Icon name="paperclip" size={16} />
+            </div>
+            <span className="feature-label">Upload</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTemplateLibraryOpen(true)}
+            className="feature-action-btn"
+            title="Ugovori i Obrasci"
+            disabled={isLoading || fileProcessing}
+          >
+            <div className="chat-feature-icon">
+              <Icon name="folder" size={16} />
+            </div>
+            <span className="feature-label">Ugovori i Obrasci</span>
+          </button>
+        </div>
+
         <div className="input-hint">
           {(userStatus && userStatus.total_messages_sent === 0) ? (
             <>
@@ -633,6 +656,16 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
           )}
         </div>
       </form>
+
+      {/* Template Library Modal */}
+      <TemplateLibraryModal
+        isOpen={templateLibraryOpen}
+        onClose={() => setTemplateLibraryOpen(false)}
+        userStatus={userStatus}
+        onOpenAuthModal={onOpenAuthModal}
+        onOpenPlanSelection={onOpenPlanSelection}
+        isAuthenticated={isAuthenticated}
+      />
     </div>
   );
 };

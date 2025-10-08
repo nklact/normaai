@@ -52,6 +52,20 @@ function App() {
     loadChats();
   }, []);
 
+  // Detect Tauri iOS app for platform-specific styling
+  useEffect(() => {
+    if (window.__TAURI__) {
+      // We're in Tauri - check if it's iOS
+      const platform = navigator.platform || navigator.userAgentData?.platform || '';
+      const isIOS = /iPhone|iPad|iPod/.test(platform) || /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+      if (isIOS) {
+        document.documentElement.classList.add('tauri-ios');
+        console.log('🔍 Detected Tauri iOS app - added tauri-ios class');
+      }
+    }
+  }, []);
+
   // Initialize authentication state
   const initializeAuth = async () => {
     try {

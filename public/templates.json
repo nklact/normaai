@@ -1,0 +1,1189 @@
+{
+  "categories": [
+    {
+      "id": "fiskalna-kasa",
+      "name": "Fiskalna kasa",
+      "slug": "fiskalna-kasa"
+    },
+    {
+      "id": "odluke",
+      "name": "Odluke",
+      "slug": "odluke"
+    },
+    {
+      "id": "obrasci",
+      "name": "Obrasci",
+      "slug": "obrasci"
+    },
+    {
+      "id": "obracuni",
+      "name": "Obračuni",
+      "slug": "obracuni"
+    },
+    {
+      "id": "pdv",
+      "name": "PDV",
+      "slug": "pdv"
+    },
+    {
+      "id": "pib-i-m4-obrasci",
+      "name": "PIB i M4 obrasci",
+      "slug": "pib-i-m4-obrasci"
+    },
+    {
+      "id": "poreske-prijave",
+      "name": "Poreske prijave",
+      "slug": "poreske-prijave"
+    },
+    {
+      "id": "registracione-prijave-osnivanja",
+      "name": "Registracione prijave osnivanja",
+      "slug": "registracione-prijave-osnivanja"
+    },
+    {
+      "id": "ugovori",
+      "name": "Ugovori",
+      "slug": "ugovori"
+    },
+    {
+      "id": "zahtevi",
+      "name": "Zahtevi",
+      "slug": "zahtevi"
+    },
+    {
+      "id": "zakoni",
+      "name": "Zakoni",
+      "slug": "zakoni"
+    }
+  ],
+  "templates": [
+    {
+      "id": "ipu-1",
+      "name": "IPU-1",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "IPU-1.pdf",
+      "path": "/templates/fiskalna-kasa/IPU-1.pdf"
+    },
+    {
+      "id": "obrazac-edi",
+      "name": "Obrazac EDI - Knjiga dnevnih izveštaja",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Obrazac%20EDI%20-%20Knjiga%20dnevnih%20izvestaja.pdf",
+      "path": "/templates/fiskalna-kasa/Obrazac%20EDI%20-%20Knjiga%20dnevnih%20izvestaja.pdf"
+    },
+    {
+      "id": "obrazac-efru",
+      "name": "Obrazac EFRU - Evidencija o blokovima fiskalnih računa izdatim u upotrebu",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Obrazac%20EFRU%20-%20Evidencija%20o%20blokovima%20fiskalnih%20racuna%20izdatim%20u%20upotrebu.pdf",
+      "path": "/templates/fiskalna-kasa/Obrazac%20EFRU%20-%20Evidencija%20o%20blokovima%20fiskalnih%20racuna%20izdatim%20u%20upotrebu.pdf"
+    },
+    {
+      "id": "obrazac-fr",
+      "name": "Obrazac FR - Fiskalni račun",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Obrazac%20FR%20-%20Fiskalni%20racun.pdf",
+      "path": "/templates/fiskalna-kasa/Obrazac%20FR%20-%20Fiskalni%20racun.pdf"
+    },
+    {
+      "id": "obrazac-ni",
+      "name": "Obrazac NI - Nalog za ispravku (kod fiskalnih kasa)",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Obrazac%20NI%20-%20Nalog%20za%20ispravku%20%28kod%20fiskalnih%20kasa%29.pdf",
+      "path": "/templates/fiskalna-kasa/Obrazac%20NI%20-%20Nalog%20za%20ispravku%20%28kod%20fiskalnih%20kasa%29.pdf"
+    },
+    {
+      "id": "obrazac-ob",
+      "name": "Obrazac OB - Obaveštenje o izdavanju fiskalnog isečka",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Obrazac%20OB-%20obavestenje%20o%20izdavanju%20fiskalnog%20isecka.pdf",
+      "path": "/templates/fiskalna-kasa/Obrazac%20OB-%20obavestenje%20o%20izdavanju%20fiskalnog%20isecka.pdf"
+    },
+    {
+      "id": "pravilnik-sadrzina-evidentiranja-prometa",
+      "name": "Pravilnik o sadržini i načinu evidentiranja prometa izdavanjem fiskalnog računa",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Pravilnik%20o%20sadrzini%20i%20nacinu%20evidentiranja%20prometa%20izdavanjem%20fiskalnog%20racuna.pdf",
+      "path": "/templates/fiskalna-kasa/Pravilnik%20o%20sadrzini%20i%20nacinu%20evidentiranja%20prometa%20izdavanjem%20fiskalnog%20racuna.pdf"
+    },
+    {
+      "id": "sk",
+      "name": "SK",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "SK.pdf",
+      "path": "/templates/fiskalna-kasa/SK.pdf"
+    },
+    {
+      "id": "uzmite-racun",
+      "name": "Uzmite račun",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "Uzmite%20racun.pdf",
+      "path": "/templates/fiskalna-kasa/Uzmite%20racun.pdf"
+    },
+    {
+      "id": "zib",
+      "name": "ZIB",
+      "description": "",
+      "category": "fiskalna-kasa",
+      "filename": "zib.pdf",
+      "path": "/templates/fiskalna-kasa/zib.pdf"
+    },
+    {
+      "id": "odluka-o-sluzbenom-putu",
+      "name": "Odluka o službenom putu",
+      "description": "",
+      "category": "odluke",
+      "filename": "DOKUMENTI-Odluka-o-sluzbenom-putu.docx",
+      "path": "/templates/odluke/DOKUMENTI-Odluka-o-sluzbenom-putu.docx"
+    },
+    {
+      "id": "odluka-o-dodatnoj-uplati-sredstava",
+      "name": "Odluka o dodatnoj uplati sredstava koji ne uvećava osnovni kapital",
+      "description": "",
+      "category": "odluke",
+      "filename": "Odluka-o-dodatnoj-uplati-sredstava-koji-ne-uvecava-osnovni-kapital.docx",
+      "path": "/templates/odluke/Odluka-o-dodatnoj-uplati-sredstava-koji-ne-uvecava-osnovni-kapital.docx"
+    },
+    {
+      "id": "odluka-o-raspodeli-dobiti",
+      "name": "Odluka o raspodeli dobiti",
+      "description": "",
+      "category": "odluke",
+      "filename": "odluka_o_raspodeli_dobiti.docx",
+      "path": "/templates/odluke/odluka_o_raspodeli_dobiti.docx"
+    },
+    {
+      "id": "odluka-o-usvajanju-finansijskih-izvestaja",
+      "name": "Odluka o usvajanju finansijskih izveštaja",
+      "description": "",
+      "category": "odluke",
+      "filename": "odluka_o_usvajanju_finansijskih_izvestaja.docx",
+      "path": "/templates/odluke/odluka_o_usvajanju_finansijskih_izvestaja.docx"
+    },
+    {
+      "id": "odluka-o-odredivanju-lica-ovlascenog-za-uzbunjivanje",
+      "name": "Primer odluke o određivanju lica ovlašćenog za prijem informacije i vođenje postupka u vezi sa uzbunjivanjem",
+      "description": "",
+      "category": "odluke",
+      "filename": "PRIMER-ODLUKE-O-ODREDIVANJU-LICA-OVLASCENOG-ZA-PRIJEM-INFORMACIJE-I-VODENJE-POSTUPKA-U-VEZI-SA-UZBUNJIVANJEM.docx",
+      "path": "/templates/odluke/PRIMER-ODLUKE-O-ODREDIVANJU-LICA-OVLASCENOG-ZA-PRIJEM-INFORMACIJE-I-VODENJE-POSTUPKA-U-VEZI-SA-UZBUNJIVANJEM.docx"
+    },
+    {
+      "id": "pravilnik-o-postupku-unutrasnjeg-uzbunjivanja",
+      "name": "Primer pravilnika o postupku unutrašnjeg uzbunjivanja",
+      "description": "",
+      "category": "odluke",
+      "filename": "PRIMER-PRAVILNIKA-O-POSTUPKU-UNUTRASNJEG-UZBUNJIVANJA.docx",
+      "path": "/templates/odluke/PRIMER-PRAVILNIKA-O-POSTUPKU-UNUTRASNJEG-UZBUNJIVANJA.docx"
+    },
+    {
+      "id": "bilans-stanja-uspeha-aneks",
+      "name": "Bilans stanja, bilans uspeha i statistički aneks za privredna lica",
+      "description": "",
+      "category": "obrasci",
+      "filename": "bilans_stanja_bilans_uspeha_i_statisticki_aneks_za_privredna_lica.pdf",
+      "path": "/templates/obrasci/bilans_stanja_bilans_uspeha_i_statisticki_aneks_za_privredna_lica.pdf"
+    },
+    {
+      "id": "samoinicijativno-prijavljivanje",
+      "name": "Samoinicijativno prijavljivanje",
+      "description": "",
+      "category": "obrasci",
+      "filename": "Download.-SamoinicijativnoPrijavljivanje.pdf",
+      "path": "/templates/obrasci/Download.-SamoinicijativnoPrijavljivanje.pdf"
+    },
+    {
+      "id": "ipdn",
+      "name": "IPDN",
+      "description": "",
+      "category": "obrasci",
+      "filename": "ipdn.pdf",
+      "path": "/templates/obrasci/ipdn.pdf"
+    },
+    {
+      "id": "m-obrazac",
+      "name": "M obrazac - Prijava, promena, odjava na obavezno socijalno osiguranje",
+      "description": "",
+      "category": "obrasci",
+      "filename": "m-obrazac-prijava-promena-odjava-na-obavezno-socijalno-osiguranje.pdf",
+      "path": "/templates/obrasci/m-obrazac-prijava-promena-odjava-na-obavezno-socijalno-osiguranje.pdf"
+    },
+    {
+      "id": "oa-1",
+      "name": "OA-I",
+      "description": "",
+      "category": "obrasci",
+      "filename": "oa-I.pdf",
+      "path": "/templates/obrasci/oa-I.pdf"
+    },
+    {
+      "id": "oa-2-5",
+      "name": "OA-II-V",
+      "description": "",
+      "category": "obrasci",
+      "filename": "oa-II-V.pdf",
+      "path": "/templates/obrasci/oa-II-V.pdf"
+    },
+    {
+      "id": "obrazac-eppdv",
+      "name": "Obrazac EPPDV - Prijava za evidentiranje obveznika poreza na dodatu vrednost",
+      "description": "",
+      "category": "obrasci",
+      "filename": "obrazac_eppdv_-_prijava_za_evidentiranje_obveznika_poreza_na_dodartu_vrednost.pdf",
+      "path": "/templates/obrasci/obrazac_eppdv_-_prijava_za_evidentiranje_obveznika_poreza_na_dodartu_vrednost.pdf"
+    },
+    {
+      "id": "obrazac-iepdv",
+      "name": "Obrazac IEPDV - Prijava za izmenu podataka za evidentiranje obveznika PDV",
+      "description": "",
+      "category": "obrasci",
+      "filename": "obrazac_iepdv_-_prijava_za_izmenu_podataka_za_evidentiranje_obveznika_poreza_na_dodatu_vrednost.pdf",
+      "path": "/templates/obrasci/obrazac_iepdv_-_prijava_za_izmenu_podataka_za_evidentiranje_obveznika_poreza_na_dodatu_vrednost.pdf"
+    },
+    {
+      "id": "obrazac-jrpps-1",
+      "name": "Obrazac JRPPS 1 - Registraciona prijava osnivanja preduzetnika",
+      "description": "",
+      "category": "obrasci",
+      "filename": "obrazac_jrpps_1_-_registraciona_prijava_osnivanja_preduzetnika.pdf",
+      "path": "/templates/obrasci/obrazac_jrpps_1_-_registraciona_prijava_osnivanja_preduzetnika.pdf"
+    },
+    {
+      "id": "obrazac-mun",
+      "name": "Obrazac MUN - Prijava o uplati doprinosa po osnovu ugovorene naknade",
+      "description": "",
+      "category": "obrasci",
+      "filename": "obrazac_mun_-_prijava_o_uplati_doprinosa_po_osnovu_ugovorene_naknade_odnosno_naknade_po_osnovu_ugovora_o_dopunskom_radu.pdf",
+      "path": "/templates/obrasci/obrazac_mun_-_prijava_o_uplati_doprinosa_po_osnovu_ugovorene_naknade_odnosno_naknade_po_osnovu_ugovora_o_dopunskom_radu.pdf"
+    },
+    {
+      "id": "obrazac-6",
+      "name": "Obrazac 6",
+      "description": "",
+      "category": "obrasci",
+      "filename": "Obrazac6.pdf",
+      "path": "/templates/obrasci/Obrazac6.pdf"
+    },
+    {
+      "id": "overeni-potpis-lica",
+      "name": "Overeni potpis lica ovlašćenih za zastupanje",
+      "description": "",
+      "category": "obrasci",
+      "filename": "overeni_potpisis_lica_ovlascenih_za_zastupanje.pdf",
+      "path": "/templates/obrasci/overeni_potpisis_lica_ovlascenih_za_zastupanje.pdf"
+    },
+    {
+      "id": "pb-1",
+      "name": "PB-1",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pb-1.pdf",
+      "path": "/templates/obrasci/pb-1.pdf"
+    },
+    {
+      "id": "pb-2",
+      "name": "PB-2",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pb-2.pdf",
+      "path": "/templates/obrasci/pb-2.pdf"
+    },
+    {
+      "id": "pbn-1",
+      "name": "PBN-1",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pbn-1.pdf",
+      "path": "/templates/obrasci/pbn-1.pdf"
+    },
+    {
+      "id": "pdn",
+      "name": "PDN",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pdn.pdf",
+      "path": "/templates/obrasci/pdn.pdf"
+    },
+    {
+      "id": "pdp",
+      "name": "PDP",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pdp.pdf",
+      "path": "/templates/obrasci/pdp.pdf"
+    },
+    {
+      "id": "pep",
+      "name": "PEP",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pep.pdf",
+      "path": "/templates/obrasci/pep.pdf"
+    },
+    {
+      "id": "pk",
+      "name": "PK",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pk.pdf",
+      "path": "/templates/obrasci/pk.pdf"
+    },
+    {
+      "id": "pk-1",
+      "name": "PK-1",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pk-1.pdf",
+      "path": "/templates/obrasci/pk-1.pdf"
+    },
+    {
+      "id": "pk-2",
+      "name": "PK-2",
+      "description": "",
+      "category": "obrasci",
+      "filename": "PK2.pdf",
+      "path": "/templates/obrasci/PK2.pdf"
+    },
+    {
+      "id": "pk-3",
+      "name": "PK-3",
+      "description": "",
+      "category": "obrasci",
+      "filename": "PK3.pdf",
+      "path": "/templates/obrasci/PK3.pdf"
+    },
+    {
+      "id": "poos",
+      "name": "POOS",
+      "description": "",
+      "category": "obrasci",
+      "filename": "poos.pdf",
+      "path": "/templates/obrasci/poos.pdf"
+    },
+    {
+      "id": "potvrda-o-zaradi",
+      "name": "Potvrda o zaradi",
+      "description": "",
+      "category": "obrasci",
+      "filename": "potvrda-o-zaradi.pdf",
+      "path": "/templates/obrasci/potvrda-o-zaradi.pdf"
+    },
+    {
+      "id": "pp-opj",
+      "name": "PP OPJ - Poreska prijava o obračunatom i plaćenom porezu na zarade",
+      "description": "",
+      "category": "obrasci",
+      "filename": "pp_opj_-_poreska_prijava_o_obracunatom_i_placenom_porezu_na_zarade.pdf",
+      "path": "/templates/obrasci/pp_opj_-_poreska_prijava_o_obracunatom_i_placenom_porezu_na_zarade.pdf"
+    },
+    {
+      "id": "registraciona-prijava-promene-preduzetnik",
+      "name": "Registraciona prijava promene podataka o preduzetniku",
+      "description": "",
+      "category": "obrasci",
+      "filename": "registraciona_prijava_promene_podataka_o_preduzetniku.pdf",
+      "path": "/templates/obrasci/registraciona_prijava_promene_podataka_o_preduzetniku.pdf"
+    },
+    {
+      "id": "primer-knjiznog-odobrenja",
+      "name": "Primer knjižnog odobrenja",
+      "description": "",
+      "category": "obrasci",
+      "filename": "DOKUMENTI-Primer-knjiznog-odobrenja.xlsx",
+      "path": "/templates/obrasci/DOKUMENTI-Primer-knjiznog-odobrenja.xlsx"
+    },
+    {
+      "id": "popisna-lista-osnovnih-sredstava",
+      "name": "Popisna lista osnovnih sredstava",
+      "description": "",
+      "category": "obrasci",
+      "filename": "DOWNLOAD-Popisna-lista-osnovnih-sredstava.xlsx",
+      "path": "/templates/obrasci/DOWNLOAD-Popisna-lista-osnovnih-sredstava.xlsx"
+    },
+    {
+      "id": "obrazac-kpo",
+      "name": "Obrazac KPO",
+      "description": "",
+      "category": "obrasci",
+      "filename": "obrazac_kpo.docx",
+      "path": "/templates/obrasci/obrazac_kpo.docx"
+    },
+    {
+      "id": "op",
+      "name": "OP",
+      "description": "",
+      "category": "obrasci",
+      "filename": "OP.docx",
+      "path": "/templates/obrasci/OP.docx"
+    },
+    {
+      "id": "obracun-dopunski-rad",
+      "name": "Obračun dopunski rad",
+      "description": "",
+      "category": "obracuni",
+      "filename": "DOKUMENTI-OBRACUNI-Obracun_dopunski_rad.xlsx",
+      "path": "/templates/obracuni/DOKUMENTI-OBRACUNI-Obracun_dopunski_rad.xlsx"
+    },
+    {
+      "id": "interni-obracun-pdv",
+      "name": "Interni obračun PDV",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Interni-obracun-PDV.xlsx",
+      "path": "/templates/obracuni/Interni-obracun-PDV.xlsx"
+    },
+    {
+      "id": "obracun-troskova-sluzbenog-putovanja",
+      "name": "Obračun troškova službenog putovanja",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Obracun-troskova-sluzbenog-putovanja.xlsx",
+      "path": "/templates/obracuni/Obracun-troskova-sluzbenog-putovanja.xlsx"
+    },
+    {
+      "id": "obracun-amortizacije",
+      "name": "Obračun amortizacije",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Obracun_amortizacije.xlsx",
+      "path": "/templates/obracuni/Obracun_amortizacije.xlsx"
+    },
+    {
+      "id": "obracun-kursne-razlike",
+      "name": "Obračun kursne razlike",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Obracun_kursne_razlike.xlsx",
+      "path": "/templates/obracuni/Obracun_kursne_razlike.xlsx"
+    },
+    {
+      "id": "obracun-licne-zarade-preduzetnika",
+      "name": "Obračun lične zarade preduzetnika",
+      "description": "",
+      "category": "obracuni",
+      "filename": "OBRACUN_licne_zarade_preduzetnika.xlsx",
+      "path": "/templates/obracuni/OBRACUN_licne_zarade_preduzetnika.xlsx"
+    },
+    {
+      "id": "obracun-zakupnine",
+      "name": "Obračun zakupnine",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Obracun_zakupnine.xlsx",
+      "path": "/templates/obracuni/Obracun_zakupnine.xlsx"
+    },
+    {
+      "id": "obracun-zarade",
+      "name": "Obračun zarade",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Obracun_zarade.xlsx",
+      "path": "/templates/obracuni/Obracun_zarade.xlsx"
+    },
+    {
+      "id": "prevoz",
+      "name": "Prevoz",
+      "description": "",
+      "category": "obracuni",
+      "filename": "Prevoz.xlsx",
+      "path": "/templates/obracuni/Prevoz.xlsx"
+    },
+    {
+      "id": "brosura-pdv",
+      "name": "Brošura PDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "BrosuraPDV.pdf",
+      "path": "/templates/pdv/BrosuraPDV.pdf"
+    },
+    {
+      "id": "eppdv",
+      "name": "EPPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "eppdv.pdf",
+      "path": "/templates/pdv/eppdv.pdf"
+    },
+    {
+      "id": "iepdv",
+      "name": "IEPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "IEPDV.pdf",
+      "path": "/templates/pdv/IEPDV.pdf"
+    },
+    {
+      "id": "iipppdv",
+      "name": "IIPPPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "IIPPPDV.pdf",
+      "path": "/templates/pdv/IIPPPDV.pdf"
+    },
+    {
+      "id": "ikps-pdv",
+      "name": "IKPS-PDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "IKPS-PDV.pdf",
+      "path": "/templates/pdv/IKPS-PDV.pdf"
+    },
+    {
+      "id": "kmpdv",
+      "name": "KMPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "KMPDV.pdf",
+      "path": "/templates/pdv/KMPDV.pdf"
+    },
+    {
+      "id": "lnpdv",
+      "name": "LNPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "LNPDV.pdf",
+      "path": "/templates/pdv/LNPDV.pdf"
+    },
+    {
+      "id": "obrazac-popdv",
+      "name": "Obrazac POPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "Obrazac-POPDV.pdf",
+      "path": "/templates/pdv/Obrazac-POPDV.pdf"
+    },
+    {
+      "id": "pbpdv",
+      "name": "PBPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "pbpdv.pdf",
+      "path": "/templates/pdv/pbpdv.pdf"
+    },
+    {
+      "id": "pepdv",
+      "name": "PEPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "pepdv.pdf",
+      "path": "/templates/pdv/pepdv.pdf"
+    },
+    {
+      "id": "pidpdv",
+      "name": "PIDPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "PIDPDV.pdf",
+      "path": "/templates/pdv/PIDPDV.pdf"
+    },
+    {
+      "id": "pidpdv1",
+      "name": "PIDPDV1",
+      "description": "",
+      "category": "pdv",
+      "filename": "PIDPDV1.pdf",
+      "path": "/templates/pdv/PIDPDV1.pdf"
+    },
+    {
+      "id": "pii",
+      "name": "PII",
+      "description": "",
+      "category": "pdv",
+      "filename": "PII.pdf",
+      "path": "/templates/pdv/PII.pdf"
+    },
+    {
+      "id": "ppopdv",
+      "name": "PPOPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "ppopdv.pdf",
+      "path": "/templates/pdv/ppopdv.pdf"
+    },
+    {
+      "id": "pppdv",
+      "name": "PPPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "pppdv.pdf",
+      "path": "/templates/pdv/pppdv.pdf"
+    },
+    {
+      "id": "pravilnik-evidencija-pdv",
+      "name": "Pravilnik o obliku, sadržini i načinu vođenja evidencije o PDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "Pravilnik-o-obliku-sadrzini-i-nacinu-vodjenja-evidencije-o-pdv-i-o-obliku-i-sadrzini-pregleda-obracuna-pdv.pdf",
+      "path": "/templates/pdv/Pravilnik-o-obliku-sadrzini-i-nacinu-vodjenja-evidencije-o-pdv-i-o-obliku-i-sadrzini-pregleda-obracuna-pdv.pdf"
+    },
+    {
+      "id": "pravilnik-o-pdv",
+      "name": "Pravilnik o porezu na dodatu vrednost",
+      "description": "",
+      "category": "pdv",
+      "filename": "Pravilnik-o-porezu-na-dodatu-vrednost.pdf",
+      "path": "/templates/pdv/Pravilnik-o-porezu-na-dodatu-vrednost.pdf"
+    },
+    {
+      "id": "ref1",
+      "name": "REF1",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF1.pdf",
+      "path": "/templates/pdv/REF1.pdf"
+    },
+    {
+      "id": "ref2",
+      "name": "REF2",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF2.pdf",
+      "path": "/templates/pdv/REF2.pdf"
+    },
+    {
+      "id": "ref3a",
+      "name": "REF3A",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF3A.pdf",
+      "path": "/templates/pdv/REF3A.pdf"
+    },
+    {
+      "id": "ref4",
+      "name": "REF4",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF4.pdf",
+      "path": "/templates/pdv/REF4.pdf"
+    },
+    {
+      "id": "ref4e",
+      "name": "REF4E",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF4E.pdf",
+      "path": "/templates/pdv/REF4E.pdf"
+    },
+    {
+      "id": "ref5",
+      "name": "REF5",
+      "description": "",
+      "category": "pdv",
+      "filename": "REF5.pdf",
+      "path": "/templates/pdv/REF5.pdf"
+    },
+    {
+      "id": "rfn",
+      "name": "RFN",
+      "description": "",
+      "category": "pdv",
+      "filename": "RFN.pdf",
+      "path": "/templates/pdv/RFN.pdf"
+    },
+    {
+      "id": "snpdv",
+      "name": "SNPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "SNPDV.pdf",
+      "path": "/templates/pdv/SNPDV.pdf"
+    },
+    {
+      "id": "zbpdv",
+      "name": "ZBPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "zbpdv.pdf",
+      "path": "/templates/pdv/zbpdv.pdf"
+    },
+    {
+      "id": "zppopdv",
+      "name": "ZPPOPDV",
+      "description": "",
+      "category": "pdv",
+      "filename": "zppopdv.pdf",
+      "path": "/templates/pdv/zppopdv.pdf"
+    },
+    {
+      "id": "m-4",
+      "name": "M-4",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "M-4.pdf",
+      "path": "/templates/pib-i-m4-obrasci/M-4.pdf"
+    },
+    {
+      "id": "m-4k-sp",
+      "name": "M-4K SP",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "M-4K%20SP.pdf",
+      "path": "/templates/pib-i-m4-obrasci/M-4K%20SP.pdf"
+    },
+    {
+      "id": "m-4k",
+      "name": "M-4K",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "M-4K.pdf",
+      "path": "/templates/pib-i-m4-obrasci/M-4K.pdf"
+    },
+    {
+      "id": "m-4sp",
+      "name": "M-4SP",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "M-4SP.pdf",
+      "path": "/templates/pib-i-m4-obrasci/M-4SP.pdf"
+    },
+    {
+      "id": "ppr-1",
+      "name": "PPR-1",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PPR-1.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PPR-1.pdf"
+    },
+    {
+      "id": "ppr-2",
+      "name": "PPR-2",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PPR-2.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PPR-2.pdf"
+    },
+    {
+      "id": "ppr-3",
+      "name": "PPR-3",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PPR-3.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PPR-3.pdf"
+    },
+    {
+      "id": "pr-1",
+      "name": "PR-1",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PR-1.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PR-1.pdf"
+    },
+    {
+      "id": "pr-2",
+      "name": "PR-2",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PR-2.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PR-2.pdf"
+    },
+    {
+      "id": "pr-3",
+      "name": "PR-3",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "PR-3.pdf",
+      "path": "/templates/pib-i-m4-obrasci/PR-3.pdf"
+    },
+    {
+      "id": "pravilnik-dodela-pib",
+      "name": "Pravilnik o dodeli poreskog identifikacionog broja",
+      "description": "",
+      "category": "pib-i-m4-obrasci",
+      "filename": "Pravilnik-o-dodeli-poreskog-identifikacionog-broja.pdf",
+      "path": "/templates/pib-i-m4-obrasci/Pravilnik-o-dodeli-poreskog-identifikacionog-broja.pdf"
+    },
+    {
+      "id": "obrazac-pdp",
+      "name": "Obrazac PDP - Poreska prijava za akontaciono/konačno utvrđivanje poreza na dobit",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "Obrazac_PDP_-_Poreska_prijava_za_akontaciono_-_konacno_utvrdjivanje_poreza_na_dobit_pravnih_lica_b.pdf",
+      "path": "/templates/poreske-prijave/Obrazac_PDP_-_Poreska_prijava_za_akontaciono_-_konacno_utvrdjivanje_poreza_na_dobit_pravnih_lica_b.pdf"
+    },
+    {
+      "id": "opj",
+      "name": "OPJ",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj.pdf",
+      "path": "/templates/poreske-prijave/opj.pdf"
+    },
+    {
+      "id": "opj-01",
+      "name": "OPJ-01",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-01.pdf",
+      "path": "/templates/poreske-prijave/opj-01.pdf"
+    },
+    {
+      "id": "opj-02",
+      "name": "OPJ-02",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-02.pdf",
+      "path": "/templates/poreske-prijave/opj-02.pdf"
+    },
+    {
+      "id": "opj-03",
+      "name": "OPJ-03",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-03.pdf",
+      "path": "/templates/poreske-prijave/opj-03.pdf"
+    },
+    {
+      "id": "opj-04",
+      "name": "OPJ-04",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-04.pdf",
+      "path": "/templates/poreske-prijave/opj-04.pdf"
+    },
+    {
+      "id": "opj-05",
+      "name": "OPJ-05",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-05.pdf",
+      "path": "/templates/poreske-prijave/opj-05.pdf"
+    },
+    {
+      "id": "opj-06",
+      "name": "OPJ-06",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-06.pdf",
+      "path": "/templates/poreske-prijave/opj-06.pdf"
+    },
+    {
+      "id": "opj-07",
+      "name": "OPJ-07",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-07.pdf",
+      "path": "/templates/poreske-prijave/opj-07.pdf"
+    },
+    {
+      "id": "opj-08",
+      "name": "OPJ-08",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "opj-08.pdf",
+      "path": "/templates/poreske-prijave/opj-08.pdf"
+    },
+    {
+      "id": "pp-od",
+      "name": "PP OD",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PP%20OD.pdf",
+      "path": "/templates/poreske-prijave/PP%20OD.pdf"
+    },
+    {
+      "id": "pp-od-1",
+      "name": "PP OD-1",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PP_OD-1.pdf",
+      "path": "/templates/poreske-prijave/PP_OD-1.pdf"
+    },
+    {
+      "id": "ppdg-1",
+      "name": "PPDG-1",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "ppdg-1.pdf",
+      "path": "/templates/poreske-prijave/ppdg-1.pdf"
+    },
+    {
+      "id": "ppdg-2",
+      "name": "PPDG-2",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PPDG-2.pdf",
+      "path": "/templates/poreske-prijave/PPDG-2.pdf"
+    },
+    {
+      "id": "ppdg-3",
+      "name": "PPDG-3",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PPDG-3.pdf",
+      "path": "/templates/poreske-prijave/PPDG-3.pdf"
+    },
+    {
+      "id": "ppdg-4",
+      "name": "PPDG-4",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PPDG-4.pdf",
+      "path": "/templates/poreske-prijave/PPDG-4.pdf"
+    },
+    {
+      "id": "ppdg-5",
+      "name": "PPDG-5",
+      "description": "",
+      "category": "poreske-prijave",
+      "filename": "PPDG-5.pdf",
+      "path": "/templates/poreske-prijave/PPDG-5.pdf"
+    },
+    {
+      "id": "jrpps-akcionarsko-drustvo",
+      "name": "JRPPS - Akcionarsko društvo",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Akcionarsko drustvo T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Akcionarsko drustvo T.pdf"
+    },
+    {
+      "id": "jrpps-doo",
+      "name": "JRPPS - Društvo sa ograničenom odgovornošću",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Drustvo s ogranicenom odgovornoscu T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Drustvo s ogranicenom odgovornoscu T.pdf"
+    },
+    {
+      "id": "jrpps-javno-preduzece",
+      "name": "JRPPS - Javno preduzeće",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Javno preduzece_v.2 T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Javno preduzece_v.2 T.pdf"
+    },
+    {
+      "id": "jrpps-komanditno-drustvo",
+      "name": "JRPPS - Komanditno društvo",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Komanditno drustvo T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Komanditno drustvo T.pdf"
+    },
+    {
+      "id": "jrpps-ortacko-drustvo",
+      "name": "JRPPS - Ortačko društvo",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Ortacko drustvo T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Ortacko drustvo T.pdf"
+    },
+    {
+      "id": "jrpps-predstavnistvo",
+      "name": "JRPPS - Predstavništvo stranog privrednog društva",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Predstavnistvo stranog privrednog drustva T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Predstavnistvo stranog privrednog drustva T.pdf"
+    },
+    {
+      "id": "jrpps-zadruga",
+      "name": "JRPPS - Zadruga",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Zadruga T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Zadruga T.pdf"
+    },
+    {
+      "id": "jrpps-zadruzni-savez",
+      "name": "JRPPS - Zadružni savez",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS - Zadruzni savez T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS - Zadruzni savez T.pdf"
+    },
+    {
+      "id": "jrpps-pr-osnivanje",
+      "name": "JRPPS PR - Osnivanje",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "JRPPS PR - Osnivanje T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/JRPPS PR - Osnivanje T.pdf"
+    },
+    {
+      "id": "registraciona-prijava-upisa-medija",
+      "name": "Registraciona prijava upisa medija u Registar medija",
+      "description": "",
+      "category": "registracione-prijave-osnivanja",
+      "filename": "Registraciona prijava upisa medija u Registar medija T.pdf",
+      "path": "/templates/registracione-prijave-osnivanja/Registraciona prijava upisa medija u Registar medija T.pdf"
+    },
+    {
+      "id": "ugovor-o-autorskom-delu",
+      "name": "Ugovor o autorskom delu",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor%20o%20autorskom%20delu.pdf",
+      "path": "/templates/ugovori/Ugovor%20o%20autorskom%20delu.pdf"
+    },
+    {
+      "id": "ugovor-o-cesiji-1",
+      "name": "Ugovor o cesiji",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor%20o%20cesiji%201..pdf",
+      "path": "/templates/ugovori/Ugovor%20o%20cesiji%201..pdf"
+    },
+    {
+      "id": "ugovor-o-delu",
+      "name": "Ugovor o delu",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor%20o%20delu.pdf",
+      "path": "/templates/ugovori/Ugovor%20o%20delu.pdf"
+    },
+    {
+      "id": "ugovor-o-pozajmici",
+      "name": "Ugovor o pozajmici",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor%20o%20pozajmici.pdf",
+      "path": "/templates/ugovori/Ugovor%20o%20pozajmici.pdf"
+    },
+    {
+      "id": "ugovor-o-asignaciji",
+      "name": "Ugovor o asignaciji",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-asignaciji.pdf",
+      "path": "/templates/ugovori/Ugovor-o-asignaciji.pdf"
+    },
+    {
+      "id": "ugovor-o-cesiji",
+      "name": "Ugovor o cesiji",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-cesiji.pdf",
+      "path": "/templates/ugovori/Ugovor-o-cesiji.pdf"
+    },
+    {
+      "id": "ugovor-o-obnavljanju-privremenih-poslova",
+      "name": "Ugovor o obavljanju privremenih i povremenih poslova",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-obnavljanju-privremenih-i-povremenih-poslova.pdf",
+      "path": "/templates/ugovori/Ugovor-o-obnavljanju-privremenih-i-povremenih-poslova.pdf"
+    },
+    {
+      "id": "ugovor-o-radu",
+      "name": "Ugovor o radu",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-radu.pdf",
+      "path": "/templates/ugovori/Ugovor-o-radu.pdf"
+    },
+    {
+      "id": "ugovor-o-zajmu",
+      "name": "Ugovor o zajmu",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-zajmu.pdf",
+      "path": "/templates/ugovori/Ugovor-o-zajmu.pdf"
+    },
+    {
+      "id": "ugovor-o-zakupu-poslovnog-prostora",
+      "name": "Ugovor o zakupu poslovnog prostora",
+      "description": "",
+      "category": "ugovori",
+      "filename": "Ugovor-o-zakupu-poslovnog-prostora.pdf",
+      "path": "/templates/ugovori/Ugovor-o-zakupu-poslovnog-prostora.pdf"
+    },
+    {
+      "id": "primer-ugovora-o-poslovno-tehnickoj-saradnji",
+      "name": "Primer ugovora o poslovno-tehničkoj saradnji",
+      "description": "",
+      "category": "ugovori",
+      "filename": "PRIMER-UGOVORA-O-POSLOVNO-TEHNICKOJ-SARADNJI.docx",
+      "path": "/templates/ugovori/PRIMER-UGOVORA-O-POSLOVNO-TEHNICKOJ-SARADNJI.docx"
+    },
+    {
+      "id": "primer-ugovora-o-poverljivosti",
+      "name": "Primer ugovora o poverljivosti",
+      "description": "",
+      "category": "ugovori",
+      "filename": "PRIMER-UGOVORA-O-POVERLJIVOSTI.docx",
+      "path": "/templates/ugovori/PRIMER-UGOVORA-O-POVERLJIVOSTI.docx"
+    },
+    {
+      "id": "molba-za-potvrdu-o-rezidentnosti",
+      "name": "Molba za potvrdu o rezidentnosti (SRB-EN)",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "Molba_za_potvrdu_o_rezidentnosti_srb-en.pdf",
+      "path": "/templates/zahtevi/Molba_za_potvrdu_o_rezidentnosti_srb-en.pdf"
+    },
+    {
+      "id": "zahtev-za-izvod-iz-registra",
+      "name": "Zahtev za izvod iz registra",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "zahtev_za_izvod_iz_registra.pdf",
+      "path": "/templates/zahtevi/zahtev_za_izvod_iz_registra.pdf"
+    },
+    {
+      "id": "zahtev-za-registraciju-brisanja",
+      "name": "Zahtev za registraciju brisanja privrednog subjekta",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "zahtev_za_registraciju_brisanja_privrednog_subjekta.pdf",
+      "path": "/templates/zahtevi/zahtev_za_registraciju_brisanja_privrednog_subjekta.pdf"
+    },
+    {
+      "id": "zahtev-za-registraciju-osnivanja",
+      "name": "Zahtev za registraciju osnivanja privrednog subjekta",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "zahtev_za_registraciju_osnivanja_privrednog_subjekta.pdf",
+      "path": "/templates/zahtevi/zahtev_za_registraciju_osnivanja_privrednog_subjekta.pdf"
+    },
+    {
+      "id": "zahtev-za-registraciju-pokretanja-likvidacije",
+      "name": "Zahtev za registraciju pokretanja postupka likvidacije",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "zahtev_za_registraciju_pokretanja_postupka_likvidacije.pdf",
+      "path": "/templates/zahtevi/zahtev_za_registraciju_pokretanja_postupka_likvidacije.pdf"
+    },
+    {
+      "id": "zahtev-za-registraciju-promene",
+      "name": "Zahtev za registraciju promene podataka privrednog društva",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "zahtev_za_registraciju_promene_podataka_privrednog_drustva.pdf",
+      "path": "/templates/zahtevi/zahtev_za_registraciju_promene_podataka_privrednog_drustva.pdf"
+    },
+    {
+      "id": "spisak-zaposlenih-za-overu-kzo",
+      "name": "Spisak zaposlenih za overu KZO",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "DOKUMENTI-Spisak-zaposlenih-za-overu-kzo.xlsx",
+      "path": "/templates/zahtevi/DOKUMENTI-Spisak-zaposlenih-za-overu-kzo.xlsx"
+    },
+    {
+      "id": "zahtev-za-preknjizavanje-pretplate",
+      "name": "Zahtev za preknjižavanje pretplate",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "DOWNLOAD-ZAHTEV-ZA-PREKNJIZAVANJE-PRETPLATE1.docx",
+      "path": "/templates/zahtevi/DOWNLOAD-ZAHTEV-ZA-PREKNJIZAVANJE-PRETPLATE1.docx"
+    },
+    {
+      "id": "zahtev-za-pausalno-oporezivanje",
+      "name": "Zahtev za paušalno oporezivanje",
+      "description": "",
+      "category": "zahtevi",
+      "filename": "Zahtev_za_pausalno_oporezivanje.docx",
+      "path": "/templates/zahtevi/Zahtev_za_pausalno_oporezivanje.docx"
+    }
+  ]
+}
