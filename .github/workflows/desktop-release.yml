@@ -2,8 +2,9 @@ name: Desktop App Release
 
 on:
   push:
+    branches: [main, master] # Triggers on every push to master
     tags:
-      - 'v*' # Triggers on tags like v0.3.3, v1.0.0, etc.
+      - 'v*' # Also triggers on version tags
   workflow_dispatch: # Allow manual triggering from GitHub UI
 
 jobs:
