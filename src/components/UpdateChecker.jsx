@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { check } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/api/process';
+import { relaunch } from '@tauri-apps/plugin-process';
 import './UpdateChecker.css';
 
 export function UpdateChecker() {
@@ -65,9 +65,11 @@ export function UpdateChecker() {
         }
       });
 
-      console.log('Update installed successfully, relaunching...');
+      console.log('Update installed successfully, relaunching app...');
 
       // Relaunch the application
+      // Note: On Windows, the app automatically exits during installation,
+      // so this mainly applies to macOS and Linux
       await relaunch();
     } catch (err) {
       console.error('Update installation failed:', err);
