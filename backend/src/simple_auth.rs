@@ -83,7 +83,7 @@ pub async fn check_ip_trial_limits(
     let ip_network = ipnetwork::IpNetwork::from(parsed_ip);
 
     let ip_trial = sqlx::query_as::<_, crate::models::IpTrialLimit>(
-        "SELECT id, ip_address, date, count, created_at FROM ip_trial_limits WHERE ip_address = $1 AND date = CURRENT_DATE"
+        "SELECT id, ip_address, date, count, created_at FROM ip_trial_limits WHERE ip_address = $1"
     )
         .bind(ip_network)
         .fetch_optional(pool)
@@ -97,7 +97,7 @@ pub async fn check_ip_trial_limits(
         })?;
 
     // Return true if no record found (allowed) or count < 3 (allowed)
-    // Return false if count >= 3 (blocked)
+    // Return false if count >= 3 (blocked) - lifetime limit, not daily
     Ok(ip_trial.map_or(true, |record| record.count < 3))
 }
 
@@ -1232,9 +1232,9 @@ pub async fn start_trial_handler(
     let client_ip_network =
         ipnetwork::IpNetwork::from(client_ip_str.parse::<std::net::IpAddr>().unwrap());
     sqlx::query(
-        "INSERT INTO ip_trial_limits (ip_address, date, count)
-         VALUES ($1, CURRENT_DATE, 1)
-         ON CONFLICT (ip_address, date)
+        "INSERT INTO ip_trial_limits (ip_address, count)
+         VALUES ($1, 1)
+         ON CONFLICT (ip_address)
          DO UPDATE SET count = ip_trial_limits.count + 1",
     )
     .bind(client_ip_network)

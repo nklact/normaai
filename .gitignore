@@ -45,6 +45,11 @@ signing.properties
 *.pem
 *_base64.txt
 
+# Tauri updater signing keys (DO NOT COMMIT)
+norma-ai-updater.key
+norma-ai-updater.key.pub
+*.key.pub
+
 # Rust build artifacts
 backend/target/
 backend/Cargo.lock

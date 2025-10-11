@@ -85,6 +85,7 @@ pub struct QuestionRequest {
 pub struct QuestionResponse {
     pub answer: String,
     pub law_quotes: Vec<String>,
+    pub law_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -273,6 +273,17 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
         </div>
       )}
 
+      {reason === 'ip_limit_exceeded' && activeTab !== 'forgot' && (
+        <div className="auth-reason-message">
+          <div className="reason-icon">
+            <Icon name="info" size={20} />
+          </div>
+          <div className="reason-text">
+            <p>Molimo registrujte se za nastavak.</p>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="form-group">
           <label htmlFor="email" className="form-label">Email adresa</label>

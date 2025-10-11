@@ -263,21 +263,60 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
             date DATE DEFAULT CURRENT_DATE,
             count INTEGER DEFAULT 1,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            UNIQUE (ip_address, date)
+            UNIQUE (ip_address)
         )
     "#,
     )
     .execute(pool)
     .await?;
 
-    // Migration: Move existing trial data from usage_logs to ip_trial_limits
+    // Migration: Update unique constraint to lifetime (ip_address only, not per date)
+    // Drop old constraint if it exists
     sqlx::query(
         r#"
-        INSERT INTO ip_trial_limits (ip_address, date, count, created_at)
-        SELECT ip_address, date, count, created_at
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'ip_trial_limits_ip_address_date_key'
+            ) THEN
+                ALTER TABLE ip_trial_limits DROP CONSTRAINT ip_trial_limits_ip_address_date_key;
+            END IF;
+        END $$;
+    "#,
+    )
+    .execute(pool)
+    .await
+    .ok(); // Ignore errors if constraint doesn't exist
+
+    // Add new unique constraint if not exists
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'ip_trial_limits_ip_address_key'
+            ) THEN
+                ALTER TABLE ip_trial_limits ADD CONSTRAINT ip_trial_limits_ip_address_key UNIQUE (ip_address);
+            END IF;
+        END $$;
+    "#,
+    )
+    .execute(pool)
+    .await
+    .ok(); // Ignore errors if constraint already exists
+
+    // Migration: Move existing trial data from usage_logs to ip_trial_limits
+    // Aggregate all trials per IP (lifetime, not per day)
+    sqlx::query(
+        r#"
+        INSERT INTO ip_trial_limits (ip_address, count, created_at)
+        SELECT ip_address, SUM(count) as total_count, MIN(created_at) as first_trial
         FROM usage_logs
         WHERE activity_type = 'trial_start' AND ip_address IS NOT NULL
-        ON CONFLICT (ip_address, date) DO NOTHING
+        GROUP BY ip_address
+        ON CONFLICT (ip_address) DO NOTHING
     "#,
     )
     .execute(pool)

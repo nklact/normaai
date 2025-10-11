@@ -9,6 +9,7 @@ import ErrorDialog from "./components/ErrorDialog";
 import AuthModal from "./components/AuthModal";
 import PlanSelectionModal from "./components/PlanSelectionModal";
 import SubscriptionManagementModal from "./components/SubscriptionManagementModal";
+import UpdateChecker from "./components/UpdateChecker";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import apiService from "./services/api";
 
@@ -103,6 +104,14 @@ function App() {
             message: trialError.message,
             stack: trialError.stack
           });
+
+          // Check if error is IP limit exceeded
+          const errorMsg = trialError.message || '';
+          if (errorMsg.includes('429') || errorMsg.includes('IP_LIMIT_EXCEEDED')) {
+            console.log('🔍 DEBUG: IP limit exceeded, showing auth modal');
+            setAuthModalReason('ip_limit_exceeded');
+            setAuthModalOpen(true);
+          }
         }
       } else {
         console.log('🔍 DEBUG: User status exists, skipping trial creation');
@@ -127,6 +136,14 @@ function App() {
         setUserStatus(newStatus);
       } catch (trialError) {
         console.error('Error starting fallback trial:', trialError);
+
+        // Check if error is IP limit exceeded
+        const errorMsg = trialError.message || '';
+        if (errorMsg.includes('429') || errorMsg.includes('IP_LIMIT_EXCEEDED')) {
+          console.log('🔍 DEBUG: IP limit exceeded, showing auth modal');
+          setAuthModalReason('ip_limit_exceeded');
+          setAuthModalOpen(true);
+        }
       }
     }
   };
@@ -571,9 +588,10 @@ function App() {
 
   return (
     <ThemeProvider>
+      <UpdateChecker />
       <div className="app">
         {/* Mobile Overlay */}
-        <div 
+        <div
           className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`}
           onClick={closeMobileMenu}
         />

@@ -385,6 +385,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
         return Ok((QuestionResponse {
             answer: response.to_string(),
             law_quotes: vec![],
+            law_name: None,
         }, None));
     }
 
@@ -393,6 +394,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
         return Ok((QuestionResponse {
             answer: response.to_string(),
             law_quotes: vec![],
+            law_name: None,
         }, None));
     }
 
@@ -432,6 +434,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
     Ok((QuestionResponse {
         answer: response.to_string(), // Keep original answer clean
         law_quotes,
+        law_name: actual_law_name.clone(),
     }, actual_law_name))
 }
 
@@ -685,7 +688,7 @@ async fn process_question_with_llm_guidance(
 
     // Step 4: Add AI response to database
     let response_content = if !enhanced_response.law_quotes.is_empty() {
-        let reference_header = if let Some(law_name) = actual_law_name {
+        let reference_header = if let Some(ref law_name) = actual_law_name {
             format!("Reference: {}", law_name)
         } else {
             "Reference:".to_string()
@@ -984,6 +987,7 @@ fn parse_ai_response(response: &str) -> Result<QuestionResponse, String> {
     Ok(QuestionResponse {
         answer,
         law_quotes,
+        law_name: None, // parse_ai_response doesn't have access to law_name (it's for parsing stored responses)
     })
 }
 

@@ -13,6 +13,7 @@
     "@emailjs/browser": "^4.4.1",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-opener": "^2.5.0",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "date-fns": "^2.30.0",
     "js-sha256": "^0.9.0",
     "mammoth": "^1.10.0",
