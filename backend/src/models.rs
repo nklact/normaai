@@ -82,10 +82,20 @@ pub struct QuestionRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct GeneratedContract {
+    pub filename: String,
+    pub download_url: String,
+    pub contract_type: String,
+    pub preview_text: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct QuestionResponse {
     pub answer: String,
     pub law_quotes: Vec<String>,
     pub law_name: Option<String>,
+    pub generated_contract: Option<GeneratedContract>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

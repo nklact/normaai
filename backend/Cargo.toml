@@ -1,6 +1,6 @@
 [package]
 name = "norma-ai-backend"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [[bin]]
@@ -30,3 +30,4 @@ supabase-auth = "0.10"
 rand = "0.8"
 sha2 = "0.10"
 ipnetwork = "0.20"
+docx-rs = "0.4"

@@ -149,6 +149,140 @@ class AuthTokenManager {
 const authManager = new AuthTokenManager();
 
 /**
+ * Cache Manager for localStorage operations
+ * Handles data caching with device fingerprint scoping for multi-user support
+ */
+class CacheManager {
+  constructor() {
+    this.prefix = 'norma_cache_';
+    this.deviceFingerprint = null;
+  }
+
+  /**
+   * Get device fingerprint (lazy loaded)
+   */
+  async getFingerprint() {
+    if (!this.deviceFingerprint) {
+      this.deviceFingerprint = await getDeviceFingerprint();
+    }
+    return this.deviceFingerprint;
+  }
+
+  /**
+   * Generate cache key with device fingerprint scope
+   */
+  async generateKey(type, id = null) {
+    const fingerprint = await this.getFingerprint();
+    return id
+      ? `${this.prefix}${fingerprint}_${type}_${id}`
+      : `${this.prefix}${fingerprint}_${type}`;
+  }
+
+  /**
+   * Get cached data
+   */
+  async get(type, id = null) {
+    try {
+      const key = await this.generateKey(type, id);
+      const cached = localStorage.getItem(key);
+
+      if (!cached) {
+        return null;
+      }
+
+      const parsed = JSON.parse(cached);
+      console.log(`📦 Cache HIT: ${type}${id ? `/${id}` : ''} (${parsed.data?.length || 'N/A'} items)`);
+      return parsed.data;
+    } catch (e) {
+      console.warn(`Cache read failed for ${type}:`, e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Set cached data
+   */
+  async set(type, data, id = null) {
+    try {
+      const key = await this.generateKey(type, id);
+      const cacheEntry = {
+        data,
+        timestamp: Date.now(),
+        deviceFingerprint: await this.getFingerprint()
+      };
+
+      localStorage.setItem(key, JSON.stringify(cacheEntry));
+      console.log(`💾 Cache SET: ${type}${id ? `/${id}` : ''} (${data?.length || 'N/A'} items)`);
+    } catch (e) {
+      // localStorage can fail due to quota or private browsing - don't throw
+      console.warn(`Cache write failed for ${type}:`, e.message);
+    }
+  }
+
+  /**
+   * Invalidate specific cache entry
+   */
+  async invalidate(type, id = null) {
+    try {
+      const key = await this.generateKey(type, id);
+      localStorage.removeItem(key);
+      console.log(`🗑️  Cache INVALIDATED: ${type}${id ? `/${id}` : ''}`);
+    } catch (e) {
+      console.warn(`Cache invalidation failed for ${type}:`, e.message);
+    }
+  }
+
+  /**
+   * Invalidate all message caches (when chat is deleted or messages change)
+   */
+  async invalidateAllMessages() {
+    try {
+      const fingerprint = await this.getFingerprint();
+      const prefix = `${this.prefix}${fingerprint}_messages_`;
+
+      // Find and remove all message cache keys for this device
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      console.log(`🗑️  Cache INVALIDATED: all messages (${keysToRemove.length} entries)`);
+    } catch (e) {
+      console.warn('Cache invalidation failed for messages:', e.message);
+    }
+  }
+
+  /**
+   * Clear all cache for current device
+   */
+  async clearAll() {
+    try {
+      const fingerprint = await this.getFingerprint();
+      const devicePrefix = `${this.prefix}${fingerprint}_`;
+
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(devicePrefix)) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      console.log(`🗑️  Cache CLEARED: all entries (${keysToRemove.length} items)`);
+    } catch (e) {
+      console.warn('Cache clear failed:', e.message);
+    }
+  }
+}
+
+const cacheManager = new CacheManager();
+
+/**
  * Unified API service that works in both Tauri desktop and web environments
  */
 class ApiService {
@@ -282,31 +416,88 @@ class ApiService {
    */
   async logout() {
     authManager.clearTokens();
+
+    // Clear all cached data on logout
+    await cacheManager.clearAll();
+
     return { success: true, message: 'Uspešno ste se odjavili' };
   }
 
   /**
-   * Get user status (trial/premium info)
+   * Get user status (trial/premium info) - with localStorage caching
+   * @param {Function} onFreshData - Optional callback when fresh data is fetched
    */
-  async getUserStatus() {
+  async getUserStatus(onFreshData = null) {
     console.log('🔍 DEBUG: apiService.getUserStatus() called');
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("get_user_status");
-    } else {
-      const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/user-status`, {
-        method: 'GET'
-      });
 
-      console.log('🔍 DEBUG: getUserStatus response status:', response.status);
-      if (!response.ok) {
-        console.log('🔍 DEBUG: getUserStatus failed with status:', response.status);
-        throw new Error(`Failed to get user status: ${response.status}`);
+    // Try to get from cache first (instant load)
+    const cached = await cacheManager.get('userStatus');
+    if (cached) {
+      console.log('⚡ Returning cached user status immediately');
+
+      // Start background refresh (non-blocking)
+      this._refreshUserStatusInBackground(onFreshData);
+
+      return cached;
+    }
+
+    // No cache - fetch fresh data
+    console.log('🌐 No cache - fetching fresh user status');
+    return await this._fetchUserStatus(onFreshData);
+  }
+
+  /**
+   * Internal: Fetch user status from server and update cache
+   */
+  async _fetchUserStatus(onFreshData = null) {
+    try {
+      let result;
+
+      if (isDesktop) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        result = await invoke("get_user_status");
+      } else {
+        const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/user-status`, {
+          method: 'GET'
+        });
+
+        console.log('🔍 DEBUG: getUserStatus response status:', response.status);
+        if (!response.ok) {
+          console.log('🔍 DEBUG: getUserStatus failed with status:', response.status);
+          throw new Error(`Failed to get user status: ${response.status}`);
+        }
+
+        result = await response.json();
       }
 
-      const result = await response.json();
       console.log('🔍 DEBUG: getUserStatus result:', result);
+
+      // Update cache with fresh data
+      await cacheManager.set('userStatus', result);
+
+      // Notify caller if callback provided
+      if (onFreshData) {
+        onFreshData(result);
+      }
+
       return result;
+    } catch (error) {
+      console.error('Failed to fetch user status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Internal: Refresh user status in background without blocking
+   */
+  async _refreshUserStatusInBackground(onFreshData = null) {
+    console.log('🔄 Starting background refresh for user status');
+    try {
+      await this._fetchUserStatus(onFreshData);
+      console.log('✅ Background refresh complete for user status');
+    } catch (error) {
+      console.warn('Background refresh failed for user status:', error.message);
+      // Don't throw - this is a background operation
     }
   }
 
@@ -423,9 +614,12 @@ class ApiService {
    */
   async createChat(title) {
     console.log('🔍 DEBUG: apiService.createChat() called with title:', title);
+
+    let chatId;
+
     if (isDesktop) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("create_chat", { title });
+      chatId = await invoke("create_chat", { title });
     } else {
       console.log('🔍 DEBUG: apiService.createChat() - making HTTP request');
       const response = await fetch(`${API_BASE_URL}/api/chats`, {
@@ -439,42 +633,153 @@ class ApiService {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       console.log('🔍 DEBUG: apiService.createChat() - got result:', result);
-      return result.id;
+      chatId = result.id;
     }
+
+    // Invalidate chats cache since a new chat was created
+    await cacheManager.invalidate('chats');
+
+    return chatId;
   }
 
   /**
-   * Get all chats
+   * Get all chats (with localStorage caching)
+   * @param {Function} onFreshData - Optional callback when fresh data is fetched
    */
-  async getChats() {
+  async getChats(onFreshData = null) {
     console.log('🔍 DEBUG: apiService.getChats() called');
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("get_chats");
-    } else {
-      const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats`, {
-        method: 'GET'
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      console.log('🔍 DEBUG: apiService.getChats() - got result:', result.length, 'chats');
+
+    // Try to get from cache first (instant load)
+    const cached = await cacheManager.get('chats');
+    if (cached) {
+      console.log('⚡ Returning cached chats immediately');
+
+      // Start background refresh (non-blocking)
+      this._refreshChatsInBackground(onFreshData);
+
+      return cached;
+    }
+
+    // No cache - fetch fresh data
+    console.log('🌐 No cache - fetching fresh chats');
+    return await this._fetchChats(onFreshData);
+  }
+
+  /**
+   * Internal: Fetch chats from server and update cache
+   */
+  async _fetchChats(onFreshData = null) {
+    try {
+      let result;
+
+      if (isDesktop) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        result = await invoke("get_chats");
+      } else {
+        const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        result = await response.json();
+      }
+
+      console.log('🔍 DEBUG: apiService._fetchChats() - got result:', result.length, 'chats');
+
+      // Update cache with fresh data
+      await cacheManager.set('chats', result);
+
+      // Notify caller if callback provided
+      if (onFreshData) {
+        onFreshData(result);
+      }
+
       return result;
+    } catch (error) {
+      console.error('Failed to fetch chats:', error);
+      throw error;
     }
   }
 
   /**
-   * Get messages for a specific chat
+   * Internal: Refresh chats in background without blocking
    */
-  async getMessages(chatId) {
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("get_messages", { chatId });
-    } else {
-      const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats/${chatId}/messages`, {
-        method: 'GET'
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
+  async _refreshChatsInBackground(onFreshData = null) {
+    console.log('🔄 Starting background refresh for chats');
+    try {
+      await this._fetchChats(onFreshData);
+      console.log('✅ Background refresh complete for chats');
+    } catch (error) {
+      console.warn('Background refresh failed for chats:', error.message);
+      // Don't throw - this is a background operation
+    }
+  }
+
+  /**
+   * Get messages for a specific chat (with localStorage caching)
+   * @param {number} chatId - Chat ID
+   * @param {Function} onFreshData - Optional callback when fresh data is fetched
+   */
+  async getMessages(chatId, onFreshData = null) {
+    // Try to get from cache first (instant load)
+    const cached = await cacheManager.get('messages', chatId);
+    if (cached) {
+      console.log(`⚡ Returning cached messages for chat ${chatId} immediately`);
+
+      // Start background refresh (non-blocking)
+      this._refreshMessagesInBackground(chatId, onFreshData);
+
+      return cached;
+    }
+
+    // No cache - fetch fresh data
+    console.log(`🌐 No cache - fetching fresh messages for chat ${chatId}`);
+    return await this._fetchMessages(chatId, onFreshData);
+  }
+
+  /**
+   * Internal: Fetch messages from server and update cache
+   */
+  async _fetchMessages(chatId, onFreshData = null) {
+    try {
+      let result;
+
+      if (isDesktop) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        result = await invoke("get_messages", { chatId });
+      } else {
+        const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats/${chatId}/messages`, {
+          method: 'GET'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        result = await response.json();
+      }
+
+      // Update cache with fresh data
+      await cacheManager.set('messages', result, chatId);
+
+      // Notify caller if callback provided
+      if (onFreshData) {
+        onFreshData(result);
+      }
+
+      return result;
+    } catch (error) {
+      console.error(`Failed to fetch messages for chat ${chatId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Internal: Refresh messages in background without blocking
+   */
+  async _refreshMessagesInBackground(chatId, onFreshData = null) {
+    console.log(`🔄 Starting background refresh for messages (chat ${chatId})`);
+    try {
+      await this._fetchMessages(chatId, onFreshData);
+      console.log(`✅ Background refresh complete for messages (chat ${chatId})`);
+    } catch (error) {
+      console.warn(`Background refresh failed for messages (chat ${chatId}):`, error.message);
+      // Don't throw - this is a background operation
     }
   }
 
@@ -511,19 +816,25 @@ class ApiService {
   async deleteChat(chatId) {
     if (isDesktop) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("delete_chat", { chatId });
+      await invoke("delete_chat", { chatId });
     } else {
       const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats/${chatId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
     }
+
+    // Invalidate caches since chat was deleted
+    await cacheManager.invalidate('chats');
+    await cacheManager.invalidate('messages', chatId);
   }
 
   async updateChatTitle(chatId, title) {
+    let result;
+
     if (isDesktop) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("update_chat_title", { chatId, title });
+      result = await invoke("update_chat_title", { chatId, title });
     } else {
       const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/chats/${chatId}/title`, {
         method: 'PUT',
@@ -531,8 +842,13 @@ class ApiService {
         body: JSON.stringify({ title })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
+      result = await response.json();
     }
+
+    // Invalidate chats cache since title was updated
+    await cacheManager.invalidate('chats');
+
+    return result;
   }
 
   /**
@@ -549,7 +865,17 @@ class ApiService {
       })
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    const result = await response.json();
+
+    // Invalidate caches since new messages were added
+    // - Messages cache for this specific chat
+    // - Chats cache (updated_at timestamp changed)
+    // - User status (messages_remaining count changed)
+    await cacheManager.invalidate('messages', questionRequest.chat_id);
+    await cacheManager.invalidate('chats');
+    await cacheManager.invalidate('userStatus');
+
+    return result;
   }
 
   /**

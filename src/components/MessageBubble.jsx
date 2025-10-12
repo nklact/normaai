@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Icon from './Icons';
+import ContractDownloadButton from './ContractDownloadButton';
 import './MessageBubble.css';
 
-const MessageBubble = ({ message, isUser }) => {
+const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPlanSelection }) => {
   // Get initial state from localStorage, default to false (collapsed)
   const [isReferencesExpanded, setIsReferencesExpanded] = useState(() => {
     const saved = localStorage.getItem('norma_ai_references_expanded');
@@ -90,6 +91,15 @@ const MessageBubble = ({ message, isUser }) => {
           <div className="ai-answer">
             {renderText(answer)}
           </div>
+          {/* Display contract download button if available */}
+          {message.generated_contract && (
+            <ContractDownloadButton
+              contract={message.generated_contract}
+              userStatus={userStatus}
+              onOpenAuthModal={onOpenAuthModal}
+              onOpenPlanSelection={onOpenPlanSelection}
+            />
+          )}
           {quotes.length > 0 && (
             <div className="law-quotes">
               <div
@@ -100,7 +110,7 @@ const MessageBubble = ({ message, isUser }) => {
                   <Icon name="quote" size={16} />
                 </span>
                 <span className="quotes-header-text">
-                  {isReferencesExpanded ? (message.law_name || 'Reference:') : 'Prikaži reference'}
+                  {isReferencesExpanded ? (message.law_name ? `Reference: ${message.law_name}` : 'Reference:') : 'Prikaži reference'}
                 </span>
                 <span className={`chevron-icon ${isReferencesExpanded ? 'expanded' : ''}`}>
                   <Icon name={isReferencesExpanded ? "chevronUp" : "chevronDown"} size={16} />
@@ -181,6 +191,15 @@ const MessageBubble = ({ message, isUser }) => {
           <div className="ai-answer">
             {renderText(cleanContent)}
           </div>
+          {/* Display contract download button if available */}
+          {message.generated_contract && (
+            <ContractDownloadButton
+              contract={message.generated_contract}
+              userStatus={userStatus}
+              onOpenAuthModal={onOpenAuthModal}
+              onOpenPlanSelection={onOpenPlanSelection}
+            />
+          )}
           <div className="law-quotes">
             <div
               className="quotes-header clickable"
@@ -190,7 +209,7 @@ const MessageBubble = ({ message, isUser }) => {
                 <Icon name="quote" size={16} />
               </span>
               <span className="quotes-header-text">
-                {isReferencesExpanded ? (message.law_name || 'Reference:') : 'Prikaži reference'}
+                {isReferencesExpanded ? (message.law_name ? `Reference: ${message.law_name}` : 'Reference:') : 'Prikaži reference'}
               </span>
               <span className={`chevron-icon ${isReferencesExpanded ? 'expanded' : ''}`}>
                 <Icon name={isReferencesExpanded ? "chevronUp" : "chevronDown"} size={16} />

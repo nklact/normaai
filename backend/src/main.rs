@@ -5,6 +5,7 @@ mod models;
 mod simple_auth;
 mod legal_parser;
 mod laws;
+mod contracts;
 
 use axum::{
     routing::{get, post, put, delete},
@@ -53,6 +54,13 @@ async fn main() {
     // Laws are cached for 24 hours when users ask about them
     println!("✅ Server ready - laws will be cached on-demand as users ask about them");
 
+    // Clean up old contracts on startup
+    match contracts::cleanup_old_contracts() {
+        Ok(count) if count > 0 => println!("🗑️  Cleaned up {} expired contracts", count),
+        Ok(_) => println!("✅ No expired contracts to clean up"),
+        Err(e) => println!("⚠️  Contract cleanup warning: {}", e),
+    }
+
     // Configure CORS
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -98,6 +106,10 @@ async fn main() {
         .route("/api/transcribe", post(api::transcribe_audio_handler))
         .with_state((pool, openrouter_api_key, openai_api_key, jwt_secret));
 
+    // Contract download route (no auth required - files are UUID-based)
+    let contract_routes = Router::new()
+        .route("/api/contracts/:file_id", get(contracts::download_contract_handler));
+
     // Combine routes
     let app = Router::new()
         .route("/health", get(health_check))
@@ -105,6 +117,7 @@ async fn main() {
         .merge(auth_routes)
         .merge(database_routes)
         .merge(api_routes)
+        .merge(contract_routes)
         // .layer(axum::middleware::from_fn(request_logger)) // Disabled - only enable for debugging
         .layer(cors)
         .layer(TraceLayer::new_for_http())

@@ -91,7 +91,17 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
         pricing: {
           monthly: { price: 3400, currency: 'RSD' },
           yearly: { price: 34000, currency: 'RSD' }
-        }
+        },
+        features: [
+          { text: '20 poruka mesečno', enabled: true },
+          { text: 'Osnovna pravna pomoć', enabled: true },
+          { text: 'Reference na zakone', enabled: true },
+          { text: 'Generisanje ugovora', enabled: false },
+          { text: 'Analiza dokumenata', enabled: false },
+          { text: 'Glasovna pitanja', enabled: false },
+          { text: 'Email podrška', enabled: true },
+        ],
+        target: 'Za redovne korisnike'
       },
       {
         id: 'professional',
@@ -100,7 +110,17 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
         pricing: {
           monthly: { price: 6400, currency: 'RSD' },
           yearly: { price: 64000, currency: 'RSD' }
-        }
+        },
+        features: [
+          { text: 'Neograničen broj poruka', enabled: true },
+          { text: 'Napredni pravni saveti', enabled: true },
+          { text: 'Reference na zakone', enabled: true },
+          { text: 'Generisanje ugovora', enabled: true },
+          { text: 'Analiza dokumenata', enabled: true },
+          { text: 'Glasovna pitanja', enabled: true },
+          { text: 'Email podrška', enabled: true },
+        ],
+        target: 'Za advokate i agente za nekretnine'
       },
       {
         id: 'team',
@@ -109,7 +129,15 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
         pricing: {
           monthly: { price: 24900, currency: 'RSD' },
           yearly: { price: 249000, currency: 'RSD' }
-        }
+        },
+        features: [
+          { text: 'Sve funkcije iz Professional paketa', enabled: true },
+          { text: 'Upravljanje timom', enabled: true },
+          { text: 'Do 5 korisnika', enabled: true },
+          { text: 'Prioritetna podrška', enabled: true },
+          { text: 'Napredne funkcije za timove', enabled: true },
+        ],
+        target: 'Za veće timove i institucije'
       }
     ];
   };
@@ -230,6 +258,7 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
                         <h4>{plan.name}</h4>
                         {plan.isCurrent && <span className="current-plan-badge">Trenutni</span>}
                       </div>
+                      <div className="plan-target">{plan.target}</div>
                       <div className="plan-change-pricing">
                         <div className="monthly-price">
                           {formatPrice(plan.pricing.monthly.price, plan.pricing.monthly.currency, 'mesec')}
@@ -237,6 +266,20 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
                         <div className="yearly-price">
                           {formatPrice(plan.pricing.yearly.price, plan.pricing.yearly.currency, 'godina')}
                         </div>
+                      </div>
+                      <div className="plan-features">
+                        {plan.features.map((feature, index) => (
+                          <div key={index} className={`feature-item ${!feature.enabled ? 'disabled' : ''}`}>
+                            <span className="feature-icon">
+                              {feature.enabled ? (
+                                <Icon name="check" size={14} />
+                              ) : (
+                                <span>✗</span>
+                              )}
+                            </span>
+                            <span className="feature-text">{feature.text}</span>
+                          </div>
+                        ))}
                       </div>
                       <button
                         className={`plan-change-btn ${plan.isCurrent ? 'current' : 'change'}`}

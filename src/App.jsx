@@ -73,8 +73,16 @@ function App() {
       // Check if user has stored token
       const hasToken = apiService.isAuthenticated();
 
-      // Load user status (works for both authenticated users and trial users)
-      const status = await apiService.getUserStatus();
+      // Load user status with callback for fresh data updates
+      const status = await apiService.getUserStatus((freshStatus) => {
+        console.log('🔄 Fresh user status arrived from background refresh');
+        setUserStatus(freshStatus);
+
+        // Update authentication state if needed
+        const authenticated = apiService.isAuthenticated() && freshStatus && freshStatus.email;
+        setIsAuthenticated(authenticated);
+      });
+
       console.log('🔍 DEBUG: getUserStatus() returned:', JSON.stringify(status, null, 2));
       setUserStatus(status);
 
@@ -157,10 +165,16 @@ function App() {
   const loadChats = async () => {
     try {
       console.log('🔍 DEBUG: loadChats() starting');
-      const chatList = await apiService.getChats();
+
+      // Get chats with callback for fresh data updates
+      const chatList = await apiService.getChats((freshChats) => {
+        console.log('🔄 Fresh chats arrived from background refresh:', freshChats.length);
+        setChats(freshChats);
+      });
+
       console.log('🔍 DEBUG: loadChats() got chatList:', chatList.length, 'chats');
       setChats(chatList);
-      
+
       // Auto-create first chat if none exist (like ChatGPT) - but only once during init
       if (chatList.length === 0 && !hasAttemptedInitialChatCreation.current) {
         console.log('🔍 DEBUG: loadChats() - no chats found, calling createNewChat()');
@@ -182,7 +196,19 @@ function App() {
       if (!chatId || (typeof chatId === 'string' && chatId.startsWith('temp_'))) {
         return;
       }
-      const messageList = await apiService.getMessages(chatId);
+
+      // Get messages with callback for fresh data updates
+      const messageList = await apiService.getMessages(chatId, (freshMessages) => {
+        console.log(`🔄 Fresh messages arrived for chat ${chatId}:`, freshMessages.length);
+        // Only update if we're still viewing this chat
+        setMessages(prevMessages => {
+          if (currentChatId === chatId) {
+            return freshMessages;
+          }
+          return prevMessages;
+        });
+      });
+
       setMessages(messageList);
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -191,28 +217,28 @@ function App() {
   };
 
   const createNewChat = async (force = false) => {
+    console.log('🔍 DEBUG: createNewChat() called, force:', force, 'currentChatId:', currentChatId, 'messages.length:', messages.length, 'pendingChatCreation:', !!pendingChatCreation.current);
+
     // If there's already a pending chat creation, return that promise
     if (pendingChatCreation.current) {
       console.log('🔍 DEBUG: createNewChat() - returning existing pending promise');
       return pendingChatCreation.current;
     }
 
-    // Create and store promise for this chat creation
-    pendingChatCreation.current = (async () => {
+    // Prevent spam: If current chat is empty, focus it instead of creating new one
+    if (!force && currentChatId && messages.length === 0 && !(typeof currentChatId === 'string' && currentChatId.startsWith('temp_'))) {
+      console.log('🔍 DEBUG: createNewChat() - current chat is empty, returning current chat ID');
+      return currentChatId;
+    }
+
+    // Create the promise
+    const promise = (async () => {
       try {
-        console.log('🔍 DEBUG: createNewChat() called, force:', force, 'currentChatId:', currentChatId, 'messages.length:', messages.length);
-
-        // Prevent spam: If current chat is empty, focus it instead of creating new one
-        if (!force && currentChatId && messages.length === 0 && !(typeof currentChatId === 'string' && currentChatId.startsWith('temp_'))) {
-          console.log('🔍 DEBUG: createNewChat() - current chat is empty, skipping creation');
-          return currentChatId;
-        }
-
         const title = "Nova konverzacija";
         const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Optimistic UI: Create chat immediately in UI
-        setChats([{ id: tempId, title, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), isOptimistic: true }, ...chats]);
+        setChats(prevChats => [{ id: tempId, title, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), isOptimistic: true }, ...prevChats]);
         setCurrentChatId(tempId);
         setMessages([]);
 
@@ -236,13 +262,20 @@ function App() {
         setErrorMessage(`Greška prilikom kreiranja konverzacije: ${error.message || error}`);
         setErrorDialogOpen(true);
 
-        return null;
-      } finally {
-        pendingChatCreation.current = null;
+        throw error; // Re-throw so the caller knows it failed
       }
     })();
 
-    return pendingChatCreation.current;
+    // Store and track the promise
+    pendingChatCreation.current = promise;
+
+    // Clear the reference when done (success or failure)
+    promise.finally(() => {
+      console.log('🔍 DEBUG: createNewChat() - clearing pendingChatCreation');
+      pendingChatCreation.current = null;
+    });
+
+    return promise;
   };
 
   const handleDeleteChat = (chatId) => {
@@ -494,18 +527,42 @@ function App() {
 
       const response = await apiService.askQuestion(requestData);
 
-      // Remove optimistic flag from user message - it succeeded
-      setMessages(prev =>
-        prev.map(msg =>
+      // Format AI message content to match MessageBubble expectations
+      // Backend stores it with "Reference:" separator, so we recreate that format
+      let aiMessageContent = response.answer;
+
+      if (response.law_quotes && response.law_quotes.length > 0) {
+        const referenceHeader = response.law_name
+          ? `Reference: ${response.law_name}`
+          : 'Reference:';
+
+        aiMessageContent = `${response.answer}\n\n${referenceHeader}\n${response.law_quotes.join('\n\n')}`;
+      }
+
+      // Create AI message object matching database schema
+      const aiMessage = {
+        role: "assistant",
+        content: aiMessageContent,
+        law_name: response.law_name || null,
+        created_at: new Date().toISOString(),
+        has_document: false,
+        document_filename: null,
+        // Add contract generation metadata if present
+        generated_contract: response.generated_contract || null,
+      };
+
+      // Update messages: remove optimistic flag from user message and add AI response
+      setMessages(prev => [
+        ...prev.map(msg =>
           msg.isOptimistic && msg.content === question
             ? { ...msg, isOptimistic: false }
             : msg
-        )
-      );
+        ),
+        aiMessage
+      ]);
 
-      // Reload messages to get the AI response from database
-      await loadMessages(activeChatId);
-      await loadChats(); // Refresh chat list to update timestamps
+      // Refresh chat list in background (non-blocking)
+      loadChats().catch(err => console.warn('Could not refresh chat list:', err));
 
       // Update chat title with first user message if it's still default
       const currentChat = chats.find(chat => chat.id === activeChatId);
@@ -526,7 +583,7 @@ function App() {
           console.warn('Could not update chat title:', titleError);
         }
       }
-      
+
       // Refresh user status to update message count
       try {
         const status = await apiService.getUserStatus();

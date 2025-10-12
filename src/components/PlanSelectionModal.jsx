@@ -27,11 +27,13 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
         }
       },
       features: [
-        '20 pitanja mesečno',
-        'Osnovna pravna pomoć',
-        'Bez upload-a dokumenata',
-        'Bez glasovnih pitanja',
-        'Osnovna podrška',
+        { text: '20 poruka mesečno', enabled: true },
+        { text: 'Osnovna pravna pomoć', enabled: true },
+        { text: 'Reference na zakone', enabled: true },
+        { text: 'Generisanje ugovora', enabled: false },
+        { text: 'Analiza dokumenata', enabled: false },
+        { text: 'Glasovna pitanja', enabled: false },
+        { text: 'Email podrška', enabled: true },
       ],
       popular: false,
       disabled: false,
@@ -55,11 +57,13 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
         }
       },
       features: [
-        'Neograničen broj pitanja',
-        'Napredni pravni saveti',
-        'Upload fajlova (ugovori, dokumenta, itd.)',
-        'Glasovna pitanja (mikrofon)',
-        'Email podrška',
+        { text: 'Neograničen broj poruka', enabled: true },
+        { text: 'Napredni pravni saveti', enabled: true },
+        { text: 'Reference na zakone', enabled: true },
+        { text: 'Generisanje ugovora', enabled: true },
+        { text: 'Analiza dokumenata', enabled: true },
+        { text: 'Glasovna pitanja', enabled: true },
+        { text: 'Email podrška', enabled: true },
       ],
       popular: true,
       disabled: false,
@@ -83,11 +87,11 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
         }
       },
       features: [
-        'Neograničen broj pitanja',
-        'Sve Professional funkcije',
-        'Upravljanje timom (do 5 korisnika)',
-        'Email i prioritetna podrška',
-        'Napredne funkcije za timove',
+        { text: 'Sve funkcije iz Professional paketa', enabled: true },
+        { text: 'Upravljanje timom', enabled: true },
+        { text: 'Do 5 korisnika', enabled: true },
+        { text: 'Prioritetna podrška', enabled: true },
+        { text: 'Napredne funkcije za timove', enabled: true },
       ],
       popular: false,
       disabled: false,
@@ -200,7 +204,7 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
                 </div>
                 <div className="reason-text">
                   <strong>Potrošili ste sve probne poruke</strong>
-                  <p>Nadogradite na Premium plan za neograničeno korišćenje aplikacije.</p>
+                  <p>Izaberite plan da nastavite korišćenje aplikacije.</p>
                 </div>
               </div>
             )}
@@ -251,11 +255,15 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
 
                     <div className="plan-features">
                       {plan.features.map((feature, index) => (
-                        <div key={index} className="feature-item">
+                        <div key={index} className={`feature-item ${!feature.enabled ? 'disabled' : ''}`}>
                           <span className="feature-icon">
-                            <Icon name="check" size={14} color="white" />
+                            {feature.enabled ? (
+                              <Icon name="check" size={14} color="white" />
+                            ) : (
+                              <span>✗</span>
+                            )}
                           </span>
-                          <span className="feature-text">{feature}</span>
+                          <span className="feature-text">{feature.text}</span>
                         </div>
                       ))}
                     </div>

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 import Icon from './Icons';
 import TemplateLibraryModal from './TemplateLibraryModal';
+import { TypingSkeleton } from './Skeleton';
 import './ChatArea.css';
 import { extractTextFromFile, processExtractedText, isFileTypeSupported, isFileSizeValid, formatFileSize, getFileTypeDisplayName } from '../utils/fileTextExtractor';
 
@@ -483,19 +484,14 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
                       key={index}
                       message={message}
                       isUser={message.role === 'user'}
+                      userStatus={userStatus}
+                      onOpenAuthModal={onOpenAuthModal}
+                      onOpenPlanSelection={onOpenPlanSelection}
                     />
                   ))
                 )}
 
-                {isLoading && (
-                  <div className="loading-indicator">
-                    <div className="typing-animation">
-                      <div className="dot"></div>
-                      <div className="dot"></div>
-                      <div className="dot"></div>
-                    </div>
-                  </div>
-                )}
+                {isLoading && <TypingSkeleton />}
 
               </div>
           </div>

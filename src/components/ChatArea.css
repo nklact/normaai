@@ -565,9 +565,13 @@
   }
 
   .welcome-screen {
-    padding: 20px 0 100px 0; /* Remove horizontal padding for full-width questions */
+    padding: 16px; /* Even padding all around */
     /* Let flexbox handle height naturally - no fixed height needed */
     overflow-y: auto;
+    /* Keep centered vertically even when keyboard opens */
+    align-items: center;
+    justify-content: center;
+    min-height: 0; /* Allow shrinking when keyboard opens */
   }
 
   .welcome-content h1 {
@@ -582,7 +586,10 @@
 
   .welcome-content {
     max-width: none;
-    padding: 0 16px;
+    padding: 0;
+    width: 100%;
+    /* Allow content to shrink if needed when keyboard opens */
+    flex-shrink: 1;
   }
 
   .example-questions {
@@ -656,6 +663,10 @@
 
   .input-form {
     padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    background-color: var(--bg-primary);
   }
 
   /* Tauri iOS app ONLY */

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
 import Icon from './Icons';
+import { TemplateLibrarySkeleton } from './Skeleton';
 import './TemplateLibraryModal.css';
 
 const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, onOpenPlanSelection, isAuthenticated }) => {
@@ -137,10 +138,7 @@ const TemplateLibraryModal = ({ isOpen, onClose, userStatus, onOpenAuthModal, on
         {/* Accordion-style categories */}
         <div className="template-accordion">
           {isLoading ? (
-            <div className="templates-loading">
-              <div className="loading-spinner"></div>
-              <p>Učitavanje dokumenata...</p>
-            </div>
+            <TemplateLibrarySkeleton />
           ) : groupedTemplates.length > 0 ? (
             groupedTemplates.map((category) => (
               <div

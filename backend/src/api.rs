@@ -386,6 +386,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
             answer: response.to_string(),
             law_quotes: vec![],
             law_name: None,
+            generated_contract: None,
         }, None));
     }
 
@@ -395,6 +396,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
             answer: response.to_string(),
             law_quotes: vec![],
             law_name: None,
+            generated_contract: None,
         }, None));
     }
 
@@ -435,6 +437,7 @@ async fn replace_article_references_with_law(response: &str, detected_law_name: 
         answer: response.to_string(), // Keep original answer clean
         law_quotes,
         law_name: actual_law_name.clone(),
+        generated_contract: None,
     }, actual_law_name))
 }
 
@@ -679,9 +682,35 @@ async fn process_question_with_llm_guidance(
 
     // Step 4: Replace article references with cached content using detected law
     println!("🔍 DEBUG: LLM Response before article replacement: '{}'", llm_response);
-    let (enhanced_response, actual_law_name) = replace_article_references_with_law(&llm_response, detected_law_name.as_deref(), pool).await?;
+    let (mut enhanced_response, actual_law_name) = replace_article_references_with_law(&llm_response, detected_law_name.as_deref(), pool).await?;
     println!("🔍 DEBUG: After article replacement - Answer: '{}', Quotes: {:?}, Law: {:?}",
              enhanced_response.answer, enhanced_response.law_quotes, actual_law_name);
+
+    // Step 4.5: Check for generated contract
+    println!("🔍 DEBUG: Checking for contract in LLM response...");
+    if let Some((contract_content, clean_response)) = crate::contracts::detect_contract(&llm_response) {
+        println!("✅ DEBUG: Contract detected! Content length: {} chars", contract_content.len());
+
+        // Get API base URL from environment or use default
+        let api_base_url = std::env::var("API_BASE_URL")
+            .unwrap_or_else(|_| "https://norma-ai.fly.dev".to_string());
+
+        // Generate contract file
+        match crate::contracts::generate_contract_file(&contract_content, &api_base_url) {
+            Ok(contract) => {
+                println!("✅ DEBUG: Contract file generated: {}", contract.filename);
+                enhanced_response.generated_contract = Some(contract);
+                // Update answer to use clean version (without contract markers)
+                enhanced_response.answer = clean_response;
+            }
+            Err(e) => {
+                println!("❌ DEBUG: Contract generation failed: {}", e);
+                // Don't fail the request, just log the error
+            }
+        }
+    } else {
+        println!("🔍 DEBUG: No contract detected in response");
+    }
 
     println!("✅ DEBUG: Free response processing complete. Answer: {} chars, Quotes: {}",
              enhanced_response.answer.len(), enhanced_response.law_quotes.len());
@@ -810,27 +839,40 @@ fn create_conversation_messages(
     let mut messages = Vec::new();
 
     // System message with legal instructions (FREE RESPONSE - simplified)
-    let system_prompt = r#"Ti si pravni asistent za srpsko zakonodavstvo. Tvoj zadatak je da daš KRATKE i DIREKTNE odgovore.
+    let system_prompt = r#"Ti si pravni asistent za srpsko zakonodavstvo sa mogućnošću generisanja ugovora.
 
-PRAVILA ODGOVARANJA:
-1. Odgovori KRATKO i DIREKTNO
-2. Koristi znanje iz srpskog zakonodavstva i prava
-3. Navedi konkretne kazne, iznose i rokove ako postoje
+PRAVNA PITANJA - Odgovori KRATKO i DIREKTNO:
+1. Koristi znanje iz srpskog zakonodavstva
+2. Navedi konkretne kazne, iznose i rokove
 
-OBAVEZNI FORMAT:
-1. KRATAK odgovar na pitanje
-2. Nova linija sa tekstom: "Reference:"
-3. U "Reference:" Citiraj relevantne članove u sledećem formatu: Član X, Član Y, Član Z...
+FORMAT:
+1. KRATAK odgovor
+2. Nova linija: "Reference:"
+3. U "Reference:" citiraj: Član X, Član Y, Član Z...
 
-VAŽNO:
-- Ako je član povezan sa drugim članovima (primer: "Član 42 2)" je definicija žutog svetla, dok "Član 335" i "Član 338" definišu kazne za prelazak na žuto svetlo"), uključi i te povezane članove
-- NE ponavljaj isti član više puta
+GENERISANJE UGOVORA:
+Kada korisnik traži ugovor (npr. "Napravi ugovor o radu", "Treba mi ugovor o zakupu"):
 
-PRIMER odgovora:
-Za preticanje preko pune linije kazna je zatvor ili novčana kazna. Za prekoračenje brzine od 75km/h primenjuje se takođe kazna zatvora ili novčana kazna.
+1. PRIKUPI SVE podatke (za ugovor o radu: poslodavac, zaposleni, pozicija, zarada, datum, trajanje)
+2. Kada imaš dovoljno informacija, generiši ugovor sa [CONTRACT_START] i [CONTRACT_END]:
 
-Reference:
-Član 330, Član 41"#;
+[CONTRACT_START]
+UGOVOR O RADU
+
+Zaključen između:
+1. [Poslodavac]
+2. [Zaposleni]
+
+Član 1. - PREDMET UGOVORA
+[Detalji...]
+
+[Ostali potrebni članovi...]
+
+U _______, dana _______
+Potpisi
+[CONTRACT_END]
+
+Nakon [CONTRACT_END] dodaj kratak komentar i preporuku za pravni pregled."#;
     
     messages.push(OpenRouterMessage {
         role: "system".to_string(),
@@ -988,6 +1030,7 @@ fn parse_ai_response(response: &str) -> Result<QuestionResponse, String> {
         answer,
         law_quotes,
         law_name: None, // parse_ai_response doesn't have access to law_name (it's for parsing stored responses)
+        generated_contract: None,
     })
 }
 
