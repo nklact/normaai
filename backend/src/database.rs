@@ -372,6 +372,19 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // Add contract fields to messages table (migration for contract generation feature)
+    sqlx::query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS contract_file_id TEXT")
+        .execute(pool)
+        .await?;
+
+    sqlx::query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS contract_type TEXT")
+        .execute(pool)
+        .await?;
+
+    sqlx::query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS contract_filename TEXT")
+        .execute(pool)
+        .await?;
+
     // Add cost tracking columns to existing users table (migration for existing databases)
     sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_llm_cost_usd DECIMAL(10,2) DEFAULT 0.00")
         .execute(pool)
@@ -610,7 +623,7 @@ pub async fn get_messages_handler(
 
     // If ownership is verified, get the messages
     let messages = sqlx::query_as::<_, Message>(
-        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
+        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, contract_file_id, contract_type, contract_filename, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
     )
     .bind(chat_id)
     .fetch_all(&pool)

@@ -1,9 +1,12 @@
 /* Template Library Modal Styles */
-.modal-content.template-library {
-  max-width: 800px;
-  width: 95%;
-  max-height: 90vh;
-  max-height: 90dvh;
+/* Desktop/tablet only - mobile uses full-screen from Modal.css */
+@media (min-width: 769px) {
+  .modal-content.template-library {
+    max-width: 800px;
+    width: 95%;
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
 }
 
 .template-library-content {
@@ -248,12 +251,7 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .modal-content.template-library {
-    max-width: 95%;
-    width: 95%;
-    max-height: 85vh;
-    max-height: 85dvh;
-  }
+  /* Remove conflicting width/height overrides - let Modal.css handle full-screen behavior */
 
   .template-library-content {
     gap: 16px;

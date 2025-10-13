@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 import Icon from './Icons';
 import TemplateLibraryModal from './TemplateLibraryModal';
-import { TypingSkeleton } from './Skeleton';
+import { TypingSkeleton, ChatSkeleton } from './Skeleton';
 import './ChatArea.css';
 import { extractTextFromFile, processExtractedText, isFileTypeSupported, isFileSizeValid, formatFileSize, getFileTypeDisplayName } from '../utils/fileTextExtractor';
 
-const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated }) => {
+const ChatArea = ({ messages, onSendMessage, isLoading, isLoadingMessages, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -443,7 +443,9 @@ const ChatArea = ({ messages, onSendMessage, isLoading, currentChatId, userStatu
   return (
     <div className="chat-area">
       <div className="chat-content-wrapper">
-        {messages.length === 0 ? (
+        {isLoadingMessages ? (
+          <ChatSkeleton />
+        ) : messages.length === 0 ? (
           <div className="welcome-screen">
             <div className="welcome-content">
               <h1>Imate pravno pitanje?</h1>

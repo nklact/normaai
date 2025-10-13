@@ -25,15 +25,13 @@ export const MessageSkeleton = ({ isUser = false }) => {
   );
 };
 
-// Chat area skeleton for initial load
+// Chat area skeleton for initial load - Simple loading indicator
 export const ChatSkeleton = () => {
   return (
-    <div className="chat-skeleton">
-      <div className="chat-skeleton-messages">
-        <MessageSkeleton isUser={true} />
-        <MessageSkeleton isUser={false} />
-        <MessageSkeleton isUser={true} />
-        <MessageSkeleton isUser={false} />
+    <div className="chat-loading-container">
+      <div className="chat-loading-content">
+        <div className="loading-spinner"></div>
+        <p className="loading-text">Učitavanje poruka...</p>
       </div>
     </div>
   );
@@ -86,6 +84,20 @@ export const TypingSkeleton = () => {
           <span className="dot"></span>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Conversations list skeleton for sidebar loading
+export const ConversationsSkeleton = () => {
+  return (
+    <div className="conversations-skeleton">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="conversation-item-skeleton">
+          <Skeleton width="100%" height="16px" className="mb-6" />
+          <Skeleton width="60%" height="14px" />
+        </div>
+      ))}
     </div>
   );
 };

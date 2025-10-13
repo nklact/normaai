@@ -18,6 +18,8 @@ function App() {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true); // Start as true to show skeleton on mount
 
   // Track pending chat creation to prevent race conditions
   const pendingChatCreation = useRef(null);
@@ -48,9 +50,12 @@ function App() {
   const hasAttemptedInitialChatCreation = useRef(false);
 
   useEffect(() => {
-    console.log('🔍 DEBUG: App useEffect starting - initializeAuth and loadChats');
-    initializeAuth();
-    loadChats();
+    console.log('🔍 DEBUG: App useEffect starting - parallel initializeAuth and loadChats');
+    // Run in parallel for faster loading
+    Promise.all([
+      initializeAuth(),
+      loadChats()
+    ]);
   }, []);
 
   // Detect Tauri iOS app for platform-specific styling
@@ -73,16 +78,8 @@ function App() {
       // Check if user has stored token
       const hasToken = apiService.isAuthenticated();
 
-      // Load user status with callback for fresh data updates
-      const status = await apiService.getUserStatus((freshStatus) => {
-        console.log('🔄 Fresh user status arrived from background refresh');
-        setUserStatus(freshStatus);
-
-        // Update authentication state if needed
-        const authenticated = apiService.isAuthenticated() && freshStatus && freshStatus.email;
-        setIsAuthenticated(authenticated);
-      });
-
+      // Load user status
+      const status = await apiService.getUserStatus();
       console.log('🔍 DEBUG: getUserStatus() returned:', JSON.stringify(status, null, 2));
       setUserStatus(status);
 
@@ -158,6 +155,11 @@ function App() {
 
   useEffect(() => {
     if (currentChatId) {
+      // Skip loading messages if we're currently creating a new chat
+      // (messages are already set to empty by createNewChat)
+      if (pendingChatCreation.current) {
+        return;
+      }
       loadMessages(currentChatId);
     }
   }, [currentChatId]);
@@ -165,13 +167,8 @@ function App() {
   const loadChats = async () => {
     try {
       console.log('🔍 DEBUG: loadChats() starting');
-
-      // Get chats with callback for fresh data updates
-      const chatList = await apiService.getChats((freshChats) => {
-        console.log('🔄 Fresh chats arrived from background refresh:', freshChats.length);
-        setChats(freshChats);
-      });
-
+      setIsLoadingChats(true);
+      const chatList = await apiService.getChats();
       console.log('🔍 DEBUG: loadChats() got chatList:', chatList.length, 'chats');
       setChats(chatList);
 
@@ -187,6 +184,8 @@ function App() {
       }
     } catch (error) {
       console.error("Error loading chats:", error);
+    } finally {
+      setIsLoadingChats(false);
     }
   };
 
@@ -194,25 +193,18 @@ function App() {
     try {
       // Skip loading if chat ID is invalid or temporary - no messages exist yet
       if (!chatId || (typeof chatId === 'string' && chatId.startsWith('temp_'))) {
+        setMessages([]);
+        setIsLoadingMessages(false);
         return;
       }
-
-      // Get messages with callback for fresh data updates
-      const messageList = await apiService.getMessages(chatId, (freshMessages) => {
-        console.log(`🔄 Fresh messages arrived for chat ${chatId}:`, freshMessages.length);
-        // Only update if we're still viewing this chat
-        setMessages(prevMessages => {
-          if (currentChatId === chatId) {
-            return freshMessages;
-          }
-          return prevMessages;
-        });
-      });
-
+      setIsLoadingMessages(true);
+      const messageList = await apiService.getMessages(chatId);
       setMessages(messageList);
     } catch (error) {
       console.error("Error loading messages:", error);
       // Don't show error to user for message loading failures
+    } finally {
+      setIsLoadingMessages(false);
     }
   };
 
@@ -661,6 +653,7 @@ function App() {
           onDeleteChat={handleDeleteChat}
           isMobileMenuOpen={isMobileMenuOpen}
           onCloseMobileMenu={closeMobileMenu}
+          isLoadingChats={isLoadingChats}
           // Authentication props
           isAuthenticated={isAuthenticated}
           userStatus={userStatus}
@@ -682,6 +675,7 @@ function App() {
             messages={messages}
             onSendMessage={sendMessage}
             isLoading={isLoading}
+            isLoadingMessages={isLoadingMessages}
             currentChatId={currentChatId}
             userStatus={userStatus}
             onOpenPlanSelection={handleOpenPlanSelection}

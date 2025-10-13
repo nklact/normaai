@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import Icon from './Icons';
+import { ConversationsSkeleton } from './Skeleton';
 import './Sidebar.css';
 
-const Sidebar = ({ 
-  chats, 
-  currentChatId, 
-  onChatSelect, 
-  onNewChat, 
-  onDeleteChat, 
-  isMobileMenuOpen, 
+const Sidebar = ({
+  chats,
+  currentChatId,
+  onChatSelect,
+  onNewChat,
+  onDeleteChat,
+  isMobileMenuOpen,
   onCloseMobileMenu,
+  isLoadingChats,
   // Authentication props
   isAuthenticated,
   userStatus,
@@ -199,7 +201,9 @@ const Sidebar = ({
 
       <div className={`chat-list-container ${!isAuthenticated ? 'restricted' : ''}`}>
         <div className={`chat-list ${!isAuthenticated ? 'blurred' : ''}`}>
-          {chats.length === 0 ? (
+          {isLoadingChats ? (
+            <ConversationsSkeleton />
+          ) : chats.length === 0 ? (
             <div className="empty-state">
               <p>Nema prethodnih poruka</p>
               <p className="empty-subtitle">Pošaljite poruku da počnete</p>

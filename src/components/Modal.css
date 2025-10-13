@@ -322,11 +322,19 @@
     margin: 0;
   }
 
+  /* Add safe area insets for iOS full-screen modals */
+  .modal-content.auth .modal-header,
+  .modal-content.plan-selection .modal-header,
+  .modal-content.template-library .modal-header {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+
   .modal-content.auth .modal-body,
   .modal-content.plan-selection .modal-body,
   .modal-content.template-library .modal-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
   }
 }
 

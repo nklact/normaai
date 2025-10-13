@@ -628,6 +628,9 @@ async fn process_question_with_llm_guidance(
         None, // No specific law in free response mode
         Some(request.document_content.is_some()),
         request.document_filename.clone(),
+        None, // contract_file_id (only for assistant messages)
+        None, // contract_type (only for assistant messages)
+        None, // contract_filename (only for assistant messages)
         pool,
     ).await?;
 
@@ -731,6 +734,15 @@ async fn process_question_with_llm_guidance(
         enhanced_response.answer.clone()
     };
 
+    // Step 5: Save assistant response to database with contract metadata if present
+    let (contract_file_id, contract_type, contract_filename) = if let Some(ref contract) = enhanced_response.generated_contract {
+        // Extract file_id from download_url (format: /api/contracts/{file_id})
+        let file_id = contract.download_url.split('/').last().unwrap_or("").to_string();
+        (Some(file_id), Some(contract.contract_type.clone()), Some(contract.filename.clone()))
+    } else {
+        (None, None, None)
+    };
+
     add_message(
         request.chat_id,
         "assistant".to_string(),
@@ -738,6 +750,9 @@ async fn process_question_with_llm_guidance(
         actual_law_name.clone(), // Save actual law name from database for frontend display
         None, // AI responses don't have documents
         None, // AI responses don't have filenames
+        contract_file_id,
+        contract_type,
+        contract_filename,
         pool,
     ).await?;
 
@@ -778,13 +793,13 @@ async fn get_law_content(
 
 async fn get_messages(chat_id: i64, pool: &PgPool) -> Result<Vec<Message>, String> {
     let messages = sqlx::query_as::<_, Message>(
-        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
+        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, contract_file_id, contract_type, contract_filename, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
     )
     .bind(chat_id)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to fetch messages: {}", e))?;
-    
+
     Ok(messages)
 }
 
@@ -795,27 +810,33 @@ async fn add_message(
     law_name: Option<String>,
     has_document: Option<bool>,
     document_filename: Option<String>,
+    contract_file_id: Option<String>,
+    contract_type: Option<String>,
+    contract_filename: Option<String>,
     pool: &PgPool,
 ) -> Result<(), String> {
     // Insert the message
-    sqlx::query("INSERT INTO messages (chat_id, role, content, law_name, has_document, document_filename) VALUES ($1, $2, $3, $4, $5, $6)")
+    sqlx::query("INSERT INTO messages (chat_id, role, content, law_name, has_document, document_filename, contract_file_id, contract_type, contract_filename) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(chat_id)
         .bind(role)
         .bind(content)
         .bind(law_name)
         .bind(has_document.unwrap_or(false))
         .bind(document_filename)
+        .bind(contract_file_id)
+        .bind(contract_type)
+        .bind(contract_filename)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to add message: {}", e))?;
-    
+
     // Update the chat's updated_at timestamp
     sqlx::query("UPDATE chats SET updated_at = NOW() WHERE id = $1")
         .bind(chat_id)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to update chat timestamp: {}", e))?;
-    
+
     Ok(())
 }
 

@@ -653,12 +653,9 @@
     transform: translateX(-100%);
     width: 82%;
     box-shadow: var(--shadow-lg);
-    /* Apply safe area insets for iOS notch (global .app handles bottom) */
+    /* Apply safe area insets for iOS notch and home indicator */
     padding-top: env(safe-area-inset-top);
-  }
-
-  .tauri-ios .sidebar {
-    padding-bottom: 24px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
   }
 
   .sidebar.open {

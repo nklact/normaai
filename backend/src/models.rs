@@ -22,6 +22,9 @@ pub struct Message {
     pub law_name: Option<String>,
     pub has_document: Option<bool>,
     pub document_filename: Option<String>,
+    pub contract_file_id: Option<String>,
+    pub contract_type: Option<String>,
+    pub contract_filename: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
