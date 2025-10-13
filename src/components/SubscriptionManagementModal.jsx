@@ -7,13 +7,19 @@ import './PlanSelectionModal.css'; // Reuse existing styles
 const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscriptionChange }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
-  const [billingPeriod, setBillingPeriod] = useState(userStatus?.subscription_type || 'monthly');
+  const [billingPeriod, setBillingPeriod] = useState(() => {
+    const subType = userStatus?.subscription_type;
+    // Default to monthly if not set or invalid
+    return (subType === 'monthly' || subType === 'yearly') ? subType : 'monthly';
+  });
   const [showPlanChange, setShowPlanChange] = useState(false);
 
   // Update billingPeriod when userStatus changes
   useEffect(() => {
-    if (userStatus?.subscription_type) {
-      setBillingPeriod(userStatus.subscription_type);
+    const subType = userStatus?.subscription_type;
+    // Only update if valid, otherwise keep current or default to monthly
+    if (subType === 'monthly' || subType === 'yearly') {
+      setBillingPeriod(subType);
     }
   }, [userStatus?.subscription_type]);
 
@@ -381,9 +387,16 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
                   <span className="info-label">Iznos:</span>
                   <span className="info-value">
                     {(() => {
-                      const currentPricing = getCurrentPlanPricing();
-                      const pricing = currentPricing[billingPeriod];
-                      return formatPrice(pricing.price, pricing.currency, billingPeriod === 'monthly' ? 'mesec' : 'godina');
+                      try {
+                        const currentPricing = getCurrentPlanPricing();
+                        const period = (billingPeriod === 'monthly' || billingPeriod === 'yearly') ? billingPeriod : 'monthly';
+                        const pricing = currentPricing[period];
+                        if (!pricing) return 'N/A';
+                        return formatPrice(pricing.price, pricing.currency, period === 'monthly' ? 'mesec' : 'godina');
+                      } catch (error) {
+                        console.error('Error formatting price:', error);
+                        return 'N/A';
+                      }
                     })()}
                   </span>
                 </div>

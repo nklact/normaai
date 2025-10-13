@@ -56,6 +56,12 @@
   margin: 0;
 }
 
+@media (max-width: 768px) {
+  .modal-title {
+    font-size: var(--text-base);
+  }
+}
+
 .modal-close-btn {
   background: none;
   border: none;
@@ -75,6 +81,15 @@
 .modal-close-btn:hover {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+/* Hide back icon on desktop, show X */
+.modal-back-icon {
+  display: none;
+}
+
+.modal-close-x {
+  display: inline;
 }
 
 .modal-body {
@@ -335,6 +350,46 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  /* Center modal titles on mobile for full-screen modals */
+  .modal-content.auth .modal-header,
+  .modal-content.plan-selection .modal-header,
+  .modal-content.template-library .modal-header {
+    position: relative;
+    justify-content: center;
+  }
+
+  .modal-content.auth .modal-title,
+  .modal-content.plan-selection .modal-title,
+  .modal-content.template-library .modal-title {
+    text-align: center;
+    flex: 1;
+    padding: 0 48px; /* Add padding to prevent overlap with back button */
+  }
+
+  /* Back button on the left for full-screen modals on mobile */
+  .modal-content.auth .modal-close-btn,
+  .modal-content.plan-selection .modal-close-btn,
+  .modal-content.template-library .modal-close-btn {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* Show back icon, hide X on mobile for full-screen modals */
+  .modal-content.auth .modal-back-icon,
+  .modal-content.plan-selection .modal-back-icon,
+  .modal-content.template-library .modal-back-icon {
+    display: block;
+    color: var(--text-primary);
+  }
+
+  .modal-content.auth .modal-close-x,
+  .modal-content.plan-selection .modal-close-x,
+  .modal-content.template-library .modal-close-x {
+    display: none;
   }
 }
 

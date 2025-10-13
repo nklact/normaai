@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Icon from './Icons';
@@ -17,6 +17,20 @@ const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPla
     const newState = !isReferencesExpanded;
     setIsReferencesExpanded(newState);
     localStorage.setItem('norma_ai_references_expanded', newState.toString());
+
+    // Scroll down slightly (50px) when expanding to hint at expanded content
+    if (newState) {
+      setTimeout(() => {
+        // Find the scrollable container (.messages-wrapper)
+        const scrollContainer = document.querySelector('.messages-wrapper');
+        if (scrollContainer) {
+          scrollContainer.scrollBy({
+            top: 100,
+            behavior: 'smooth'
+          });
+        }
+      }, 100); // Small delay to allow DOM to render
+    }
   };
   // Enhanced function to render markdown text
   const renderText = (text) => {

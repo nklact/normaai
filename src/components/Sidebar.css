@@ -651,7 +651,7 @@
     top: 0;
     bottom: 0;
     transform: translateX(-100%);
-    width: 82%;
+    width: 84%;
     box-shadow: var(--shadow-lg);
     /* Apply safe area insets for iOS notch and home indicator */
     padding-top: env(safe-area-inset-top);
@@ -716,16 +716,20 @@
     font-size: var(--text-xs);
   }
 
-  .user-name {
-    font-size: var(--text-xs);
-  }
-
-  .user-plan {
-    font-size: var(--text-xs);
-  }
-
   .dropdown-menu-item {
-    padding: 10px 14px;
-    font-size: var(--text-xs);
+    padding: 12px 14px;
+  }
+
+  /* Fix help submenu positioning on mobile - appear above parent dropdown */
+  .help-submenu-popup {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 100%;
+    min-width: auto;
+    width: auto;
+    margin: 0;
+    margin-bottom: 50px;
   }
 }

@@ -31,7 +31,7 @@ export const ChatSkeleton = () => {
     <div className="chat-loading-container">
       <div className="chat-loading-content">
         <div className="loading-spinner"></div>
-        <p className="loading-text">Učitavanje poruka...</p>
+        <p className="loading-text">Učitavanje zakona...</p>
       </div>
     </div>
   );

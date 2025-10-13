@@ -60,6 +60,12 @@
   min-height: 0;
 }
 
+@media (min-height: 768px) {
+  .template-accordion {
+    max-height: none;
+  }
+}
+
 .template-accordion::-webkit-scrollbar {
   width: 8px;
 }
@@ -95,7 +101,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 0;
+  padding: 16px 0;
   background-color: transparent;
   border: none;
   cursor: pointer;

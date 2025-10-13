@@ -150,7 +150,13 @@ const Icon = ({ name, size = 16, color = 'currentColor', className = '', ...prop
         <polyline points="9,18 15,12 9,6"></polyline>
       </svg>
     ),
-    
+
+    chevronLeft: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+        <line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    ),
+
     // Help icon
     helpCircle: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
