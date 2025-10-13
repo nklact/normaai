@@ -349,33 +349,35 @@
   .modal-content.template-library .modal-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: max(24px, env(safe-area-inset-bottom));
   }
 
-  /* Center modal titles on mobile for full-screen modals */
+  /* Center modal titles on mobile for full-screen modals using grid */
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
   .modal-content.template-library .modal-header {
-    position: relative;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: 40px 1fr 40px; /* Back button, title, spacer */
+    grid-template-rows: auto; /* Single row */
+    align-items: center;
+    gap: 8px;
   }
 
+  /* Title - middle column, first row */
   .modal-content.auth .modal-title,
   .modal-content.plan-selection .modal-title,
   .modal-content.template-library .modal-title {
+    grid-column: 2;
+    grid-row: 1;
     text-align: center;
-    flex: 1;
-    padding: 0 48px; /* Add padding to prevent overlap with back button */
   }
 
-  /* Back button on the left for full-screen modals on mobile */
+  /* Back button - first column, first row */
   .modal-content.auth .modal-close-btn,
   .modal-content.plan-selection .modal-close-btn,
   .modal-content.template-library .modal-close-btn {
-    position: absolute;
-    left: 20px;
-    top: 50%;
-    transform: translateY(-50%);
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
   }
 
   /* Show back icon, hide X on mobile for full-screen modals */

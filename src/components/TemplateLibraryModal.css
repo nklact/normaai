@@ -58,11 +58,20 @@
   overflow-y: auto;
   max-height: 60vh;
   min-height: 0;
+  flex: 1; /* Take remaining space in parent */
 }
 
 @media (min-height: 768px) {
   .template-accordion {
     max-height: none;
+  }
+}
+
+/* iOS specific fix for full height */
+@media (max-width: 768px) {
+  .template-accordion {
+    max-height: none;
+    flex: 1;
   }
 }
 
