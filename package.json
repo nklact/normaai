@@ -1,13 +1,15 @@
 {
   "name": "norma-ai",
   "private": true,
-  "version": "0.3.5",
+  "version": "0.3.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "generate-icons": "node scripts/generate-all-icons.js",
+    "generate-ico-icns": "node scripts/generate-ico-icns.js"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.4",
     "@vitejs/plugin-react": "^4.6.0",
+    "sharp": "^0.34.4",
     "vite": "^7.0.4"
   }
 }

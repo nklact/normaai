@@ -113,6 +113,33 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
 
+      - name: Upload Windows installer to FTP
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # Find the generated setup.exe file
+          $exeFile = Get-ChildItem -Path "src-tauri\target\release\bundle\nsis" -Filter "*-setup.exe" -Recurse | Select-Object -First 1
+
+          if ($exeFile) {
+            Write-Host "Found installer: $($exeFile.FullName)"
+
+            # Copy and rename to consistent name
+            $targetFile = "Norma-AI-Setup.exe"
+            Copy-Item $exeFile.FullName -Destination $targetFile
+
+            Write-Host "Renamed to: $targetFile"
+            Write-Host "Uploading to FTP server..."
+
+            # Upload via FTP using curl
+            curl.exe -T $targetFile `
+              --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
+              "ftp://normaai.rs/downloads/$targetFile"
+
+            Write-Host "Upload completed!"
+          } else {
+            Write-Host "No installer found to upload"
+          }
+        shell: pwsh
+
   publish-release:
     permissions:
       contents: write

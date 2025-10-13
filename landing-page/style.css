@@ -1673,3 +1673,117 @@ p {
     padding: 24px;
   }
 }
+
+
+/* Download Page Styles */
+.download-section {
+    padding: 80px 0;
+}
+
+.download-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 32px;
+    margin-top: 48px;
+}
+
+.download-card {
+    background: #fff;
+    border: 2px solid #f0f0f0;
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.download-card:hover {
+    border-color: #000;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.download-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.download-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.download-card h3 {
+    font-size: 24px;
+    margin-bottom: 12px;
+    color: #000;
+}
+
+.download-card p {
+    color: #666;
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+
+.app-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.app-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 28px;
+    background: #000;
+    color: #fff;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: 1px solid #000;
+}
+
+.app-button:hover {
+    background: #1a1a1a;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.app-button svg {
+    width: 24px;
+    height: 24px;
+}
+
+.download-features {
+    list-style: none;
+    padding: 0;
+    margin: 24px 0 0 0;
+    text-align: left;
+}
+
+.download-features li {
+    padding: 8px 0;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.download-features li::before {
+    content: "✓";
+    color: #000;
+    font-weight: bold;
+}
+
+@media (max-width: 768px) {
+    .download-grid {
+        grid-template-columns: 1fr;
+    }
+}
