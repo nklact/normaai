@@ -72,6 +72,72 @@ function App() {
     }
   }, []);
 
+  // Prevent iOS keyboard from pushing sticky header up (fallback for older iOS < 15)
+  useEffect(() => {
+    // Only on mobile devices
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) return;
+
+    const handleFocus = () => {
+      // Prevent page scroll when keyboard opens
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+      }, 100);
+    };
+
+    // Add focus listener to all inputs, textareas, and selects
+    const inputs = document.querySelectorAll('input, textarea, select');
+    inputs.forEach(input => {
+      input.addEventListener('focus', handleFocus);
+    });
+
+    // Cleanup
+    return () => {
+      inputs.forEach(input => {
+        input.removeEventListener('focus', handleFocus);
+      });
+    };
+  }, []); // Run once on mount
+
+  // Detect keyboard open/close to adjust bottom padding
+  useEffect(() => {
+    // Only on mobile devices
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile || !window.visualViewport) return;
+
+    const handleViewportResize = () => {
+      // When keyboard opens, visualViewport height decreases
+      // When keyboard closes, visualViewport height increases back to window height
+      const viewportHeight = window.visualViewport.height;
+      const windowHeight = window.innerHeight;
+
+      // Keyboard is considered "open" if viewport is significantly smaller than window
+      const keyboardOpen = viewportHeight < windowHeight - 100; // 100px threshold
+
+      if (keyboardOpen) {
+        document.documentElement.classList.add('keyboard-open');
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+      }
+    };
+
+    // Listen to viewport resize events
+    window.visualViewport.addEventListener('resize', handleViewportResize);
+    window.visualViewport.addEventListener('scroll', handleViewportResize);
+
+    // Initial check
+    handleViewportResize();
+
+    // Cleanup
+    return () => {
+      window.visualViewport.removeEventListener('resize', handleViewportResize);
+      window.visualViewport.removeEventListener('scroll', handleViewportResize);
+      document.documentElement.classList.remove('keyboard-open');
+    };
+  }, []);
+
   // Initialize authentication state
   const initializeAuth = async () => {
     try {

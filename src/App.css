@@ -144,10 +144,22 @@ select {
   padding-right: env(safe-area-inset-right);
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
+  /* Smooth transition when keyboard opens/closes */
+  transition: padding-bottom 0.2s ease;
 }
 
 .tauri-ios .app {
   padding-bottom: 24px;
+}
+
+/* When keyboard is open, reduce bottom padding (keyboard provides spacing) */
+.keyboard-open .app {
+  padding-bottom: 0;
+}
+
+/* For Tauri iOS, use minimal padding when keyboard is open */
+.keyboard-open.tauri-ios .app {
+  padding-bottom: 8px;
 }
 
 .main-content {

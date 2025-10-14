@@ -39,8 +39,13 @@ async fn main() {
     let jwt_secret = env::var("JWT_SECRET")
         .unwrap_or_else(|_| "default-jwt-secret-key-change-in-production".to_string());
 
-    // Connect to database with connection health checks
+    // Connect to database with optimized pool settings for Fly.io auto-suspension
     let pool = PgPoolOptions::new()
+        .max_connections(5)                                // Limit connections (Fly.io free tier)
+        .min_connections(1)                                // Keep 1 connection ready
+        .acquire_timeout(std::time::Duration::from_secs(5)) // Fast timeout instead of 30s
+        .max_lifetime(std::time::Duration::from_secs(30 * 60)) // Recycle connections every 30 min
+        .idle_timeout(Some(std::time::Duration::from_secs(5 * 60))) // Close idle after 5 min
         .test_before_acquire(true)                         // Health check before using connection
         .connect(&database_url)
         .await
