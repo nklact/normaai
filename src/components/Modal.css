@@ -341,7 +341,10 @@
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
   .modal-content.template-library .modal-header {
-    padding-top: max(20px, env(safe-area-inset-top));
+    padding-top: max(20px, calc(env(safe-area-inset-top) + 12px));
+    padding-right: 16px;
+    padding-bottom: 16px;
+    padding-left: 16px;
   }
 
   .modal-content.auth .modal-body,

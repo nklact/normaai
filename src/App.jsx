@@ -75,6 +75,9 @@ function App() {
   // Initialize authentication state
   const initializeAuth = async () => {
     try {
+      // Wait for auth manager to load tokens from storage
+      await apiService.ensureInitialized();
+
       // Check if user has stored token
       const hasToken = apiService.isAuthenticated();
 

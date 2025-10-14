@@ -11,8 +11,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden; /* Desktop: keep hidden */
   min-height: 0; /* Allow proper scrolling behavior */
+}
+
+@media (max-width: 768px) {
+  .chat-content-wrapper {
+    overflow: visible; /* Mobile: allow parent (.main-content) to handle scrolling */
+  }
 }
 
 .welcome-screen {
@@ -562,12 +568,14 @@
 @media (max-width: 768px) {
   .chat-area {
     /* Natural flex sizing - no fixed heights or padding-top needed */
+    overflow: visible; /* Allow parent scrolling to work */
   }
 
   .welcome-screen {
     padding: 16px; /* Even padding all around */
     /* Let flexbox handle height naturally - no fixed height needed */
-    overflow-y: auto;
+    /* Parent (.main-content) handles scrolling on mobile */
+    overflow-y: visible;
     /* Keep centered vertically even when keyboard opens */
     align-items: center;
     justify-content: center;
@@ -647,6 +655,8 @@
 
   .messages-wrapper {
     /* Let flexbox handle height naturally - no fixed height needed */
+    /* Parent (.main-content) handles scrolling on mobile */
+    overflow-y: visible;
   }
 
   .messages-container::after {
@@ -667,6 +677,7 @@
     bottom: 0;
     z-index: 100;
     background-color: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
   }
 
   /* Tauri iOS app ONLY */

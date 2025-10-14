@@ -129,12 +129,36 @@ jobs:
             Write-Host "Renamed to: $targetFile"
             Write-Host "Uploading to FTP server..."
 
-            # Upload via FTP using curl
+            # Upload via FTP using curl with passive mode and directory creation
+            $exitCode = 0
             curl.exe -T $targetFile `
               --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
+              --ftp-pasv `
+              --ftp-create-dirs `
+              -v `
               "ftp://normaai.rs/downloads/$targetFile"
+            $exitCode = $LASTEXITCODE
 
-            Write-Host "Upload completed!"
+            if ($exitCode -eq 0) {
+              Write-Host "✓ Upload completed successfully!"
+            } else {
+              Write-Host "✗ Upload failed with exit code: $exitCode"
+              Write-Host "Trying alternative path (root directory)..."
+
+              # Try uploading to root if /downloads/ failed
+              curl.exe -T $targetFile `
+                --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
+                --ftp-pasv `
+                -v `
+                "ftp://normaai.rs/$targetFile"
+
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ Upload to root completed successfully!"
+              } else {
+                Write-Host "✗ Upload failed. Please check FTP permissions and path."
+                exit 1
+              }
+            }
           } else {
             Write-Host "No installer found to upload"
           }

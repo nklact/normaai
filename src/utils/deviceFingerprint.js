@@ -1,4 +1,5 @@
 import { sha256 } from "js-sha256";
+import * as persistentStorage from "./persistentStorage.js";
 
 /**
  * Detects current platform for device fingerprinting
@@ -394,14 +395,14 @@ export async function getDeviceFingerprint() {
   const currentFingerprint = await generateDeviceFingerprint();
 
   try {
-    // Try to get existing fingerprint from localStorage
-    let storedFingerprint = localStorage.getItem(STORAGE_KEY);
+    // Try to get existing fingerprint from persistent storage
+    let storedFingerprint = await persistentStorage.getItem(STORAGE_KEY);
 
     if (!storedFingerprint) {
       // Store the current fingerprint
-      localStorage.setItem(STORAGE_KEY, currentFingerprint);
+      await persistentStorage.setItem(STORAGE_KEY, currentFingerprint);
 
-      // Also try to store in IndexedDB for better persistence
+      // Also try to store in IndexedDB for better persistence (web only)
       storeInIndexedDB(STORAGE_KEY, currentFingerprint);
 
       return currentFingerprint;
@@ -415,15 +416,15 @@ export async function getDeviceFingerprint() {
       console.warn("Device fingerprint mismatch detected");
 
       // Update stored fingerprint to current one
-      localStorage.setItem(STORAGE_KEY, currentFingerprint);
+      await persistentStorage.setItem(STORAGE_KEY, currentFingerprint);
       storeInIndexedDB(STORAGE_KEY, currentFingerprint);
 
       return currentFingerprint;
     }
   } catch (e) {
-    // Fallback if localStorage is not available
+    // Fallback if storage is not available
     console.warn(
-      "localStorage not available, using device-generated fingerprint"
+      "Persistent storage not available, using device-generated fingerprint"
     );
     return currentFingerprint;
   }
@@ -466,14 +467,14 @@ function storeInIndexedDB(key, value) {
  * Clear stored device fingerprint (useful for testing)
  * Only applies to browser-based fingerprints
  */
-export function clearDeviceFingerprint() {
+export async function clearDeviceFingerprint() {
   const STORAGE_KEY = "norma_ai_device_fp";
   const platform = detectPlatform();
 
   // Only clear for browser-based platforms
   if (platform === "desktop-browser") {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      await persistentStorage.removeItem(STORAGE_KEY);
 
       // Also clear from IndexedDB
       try {
@@ -490,7 +491,7 @@ export function clearDeviceFingerprint() {
         console.warn("Could not clear device fingerprint from IndexedDB");
       }
     } catch (e) {
-      console.warn("Could not clear device fingerprint from localStorage");
+      console.warn("Could not clear device fingerprint from storage");
     }
   }
 }

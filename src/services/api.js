@@ -1,5 +1,6 @@
 // Dynamic import of Tauri API - only available in desktop builds
 import { getDeviceFingerprint } from '../utils/deviceFingerprint.js';
+import * as persistentStorage from '../utils/persistentStorage.js';
 
 // Detect if we're running in Tauri (desktop) or web environment
 const isDesktop = window.__TAURI__;
@@ -13,50 +14,53 @@ class AuthTokenManager {
     this.accessToken = null;
     this.refreshToken = null;
     this.refreshPromise = null; // Prevent multiple simultaneous refresh attempts
-    this.loadTokensFromStorage();
+    this.initPromise = this.loadTokensFromStorage();
   }
 
-  loadTokensFromStorage() {
+  async loadTokensFromStorage() {
     try {
-      this.accessToken = localStorage.getItem('norma_ai_access_token');
-      this.refreshToken = localStorage.getItem('norma_ai_refresh_token');
+      this.accessToken = await persistentStorage.getItem('norma_ai_access_token');
+      this.refreshToken = await persistentStorage.getItem('norma_ai_refresh_token');
     } catch (e) {
       console.warn('Could not load tokens from storage');
     }
   }
 
-  saveTokens(accessToken, refreshToken = null) {
+  async saveTokens(accessToken, refreshToken = null) {
     this.accessToken = accessToken;
     if (refreshToken !== null) {
       this.refreshToken = refreshToken;
     }
-    
+
     try {
       if (accessToken) {
-        localStorage.setItem('norma_ai_access_token', accessToken);
+        await persistentStorage.setItem('norma_ai_access_token', accessToken);
       }
       if (refreshToken) {
-        localStorage.setItem('norma_ai_refresh_token', refreshToken);
+        await persistentStorage.setItem('norma_ai_refresh_token', refreshToken);
       }
     } catch (e) {
       console.warn('Could not save tokens to storage');
     }
   }
 
-  clearTokens() {
+  async clearTokens() {
     this.accessToken = null;
     this.refreshToken = null;
     this.refreshPromise = null;
-    
+
     try {
-      localStorage.removeItem('norma_ai_access_token');
-      localStorage.removeItem('norma_ai_refresh_token');
+      await persistentStorage.removeItem('norma_ai_access_token');
+      await persistentStorage.removeItem('norma_ai_refresh_token');
     } catch (e) {
       console.warn('Could not clear tokens from storage');
     }
   }
 
   async getAuthHeaders() {
+    // Ensure tokens are loaded before checking
+    await this.initPromise;
+
     const headers = {
       'Content-Type': 'application/json',
       'X-Device-Fingerprint': await getDeviceFingerprint()
@@ -71,6 +75,10 @@ class AuthTokenManager {
 
   isAuthenticated() {
     return !!this.accessToken;
+  }
+
+  async ensureInitialized() {
+    await this.initPromise;
   }
 
   /**
@@ -414,6 +422,13 @@ class ApiService {
    */
   getAccessToken() {
     return authManager.accessToken;
+  }
+
+  /**
+   * Ensure auth manager is initialized
+   */
+  async ensureInitialized() {
+    await authManager.ensureInitialized();
   }
 
   // ==================== EXISTING METHODS WITH AUTH HEADERS ====================
