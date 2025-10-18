@@ -40,13 +40,14 @@ async fn main() {
         .unwrap_or_else(|_| "default-jwt-secret-key-change-in-production".to_string());
 
     // Connect to database with optimized pool settings for Fly.io auto-suspension
+    // IMPORTANT: Use Supabase's Transaction pooler (port 6543) for auto-suspend compatibility
     let pool = PgPoolOptions::new()
-        .max_connections(5)                                // Limit connections (Fly.io free tier)
-        .min_connections(1)                                // Keep 1 connection ready
-        .acquire_timeout(std::time::Duration::from_secs(5)) // Fast timeout instead of 30s
-        .max_lifetime(std::time::Duration::from_secs(30 * 60)) // Recycle connections every 30 min
-        .idle_timeout(Some(std::time::Duration::from_secs(5 * 60))) // Close idle after 5 min
-        .test_before_acquire(true)                         // Health check before using connection
+        .max_connections(10)                                    // Supabase pooler can handle more
+        .min_connections(0)                                     // Don't keep idle connections (they die on suspend)
+        .acquire_timeout(std::time::Duration::from_secs(10))    // Allow time for post-wake connection burst
+        .max_lifetime(std::time::Duration::from_secs(5 * 60))   // Recycle connections every 5 min
+        .idle_timeout(Some(std::time::Duration::from_secs(2 * 60))) // Close idle after 2 min (before suspend)
+        .test_before_acquire(true)                              // Health check before reusing
         .connect(&database_url)
         .await
         .expect("Failed to connect to database");

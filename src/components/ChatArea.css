@@ -673,11 +673,10 @@
 
   .input-form {
     padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
-    position: sticky;
-    bottom: 0;
     z-index: 100;
     background-color: var(--bg-primary);
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0; /* Prevent shrinking when keyboard opens */
   }
 
   /* Tauri iOS app ONLY */

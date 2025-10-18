@@ -103,7 +103,7 @@ svg {
 html,
 body {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport - adapts to keyboard */
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -144,8 +144,6 @@ select {
   padding-right: env(safe-area-inset-right);
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
-  /* Smooth transition when keyboard opens/closes */
-  transition: padding-bottom 0.2s ease;
 }
 
 .tauri-ios .app {
@@ -376,7 +374,8 @@ textarea:focus {
 
   .main-content {
     margin-left: 0;
-    overflow-y: auto; /* Enable scrolling for sticky to work */
+    padding-top: 70px; /* Space for fixed law selector header */
+    overflow-y: auto; /* Enable scrolling */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   }

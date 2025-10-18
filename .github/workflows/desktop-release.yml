@@ -129,11 +129,10 @@ jobs:
             Write-Host "Renamed to: $targetFile"
             Write-Host "Uploading to FTP server..."
 
-            # Upload via FTP using curl with passive mode and directory creation
+            # Upload via FTP using curl with directory creation
             $exitCode = 0
             curl.exe -T $targetFile `
               --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
-              --ftp-pasv `
               --ftp-create-dirs `
               -v `
               "ftp://normaai.rs/downloads/$targetFile"
@@ -148,7 +147,6 @@ jobs:
               # Try uploading to root if /downloads/ failed
               curl.exe -T $targetFile `
                 --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
-                --ftp-pasv `
                 -v `
                 "ftp://normaai.rs/$targetFile"
 
@@ -171,6 +169,168 @@ jobs:
     needs: [create-release, build-tauri]
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version from package.json
+        run: echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+
+      - name: Generate latest.json for updater
+        uses: actions/github-script@v7
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const releaseId = process.env.release_id;
+            const version = process.env.PACKAGE_VERSION;
+
+            // Get release details
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId
+            });
+
+            // Get all release assets
+            const { data: assets } = await github.rest.repos.listReleaseAssets({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId
+            });
+
+            // Build platforms object
+            const platforms = {};
+
+            // Helper to find signature for an asset
+            const findSignature = (assetName) => {
+              const sigAsset = assets.find(a => a.name === `${assetName}.sig`);
+              return sigAsset ? sigAsset.browser_download_url : null;
+            };
+
+            // Windows x86_64
+            const windowsAsset = assets.find(a => a.name.includes('setup.exe') || a.name.includes('x64-setup.exe'));
+            if (windowsAsset) {
+              const sigUrl = findSignature(windowsAsset.name);
+              if (sigUrl) {
+                // Download signature content
+                const sigResponse = await fetch(sigUrl);
+                const signature = await sigResponse.text();
+
+                platforms['windows-x86_64'] = {
+                  signature: signature.trim(),
+                  url: windowsAsset.browser_download_url
+                };
+              }
+            }
+
+            // macOS universal (if using universal build)
+            const macUniversalAsset = assets.find(a =>
+              a.name.includes('.app.tar.gz') && a.name.includes('universal')
+            );
+            if (macUniversalAsset) {
+              const sigUrl = findSignature(macUniversalAsset.name);
+              if (sigUrl) {
+                const sigResponse = await fetch(sigUrl);
+                const signature = await sigResponse.text();
+
+                platforms['darwin-universal'] = {
+                  signature: signature.trim(),
+                  url: macUniversalAsset.browser_download_url
+                };
+              }
+            }
+
+            // macOS aarch64 (Apple Silicon)
+            const macAarch64Asset = assets.find(a =>
+              a.name.includes('.app.tar.gz') && a.name.includes('aarch64')
+            );
+            if (macAarch64Asset) {
+              const sigUrl = findSignature(macAarch64Asset.name);
+              if (sigUrl) {
+                const sigResponse = await fetch(sigUrl);
+                const signature = await sigResponse.text();
+
+                platforms['darwin-aarch64'] = {
+                  signature: signature.trim(),
+                  url: macAarch64Asset.browser_download_url
+                };
+              }
+            }
+
+            // macOS x86_64 (Intel)
+            const macX64Asset = assets.find(a =>
+              a.name.includes('.app.tar.gz') && a.name.includes('x64') && !a.name.includes('universal')
+            );
+            if (macX64Asset) {
+              const sigUrl = findSignature(macX64Asset.name);
+              if (sigUrl) {
+                const sigResponse = await fetch(sigUrl);
+                const signature = await sigResponse.text();
+
+                platforms['darwin-x86_64'] = {
+                  signature: signature.trim(),
+                  url: macX64Asset.browser_download_url
+                };
+              }
+            }
+
+            // Linux x86_64
+            const linuxAsset = assets.find(a => a.name.includes('.AppImage.tar.gz'));
+            if (linuxAsset) {
+              const sigUrl = findSignature(linuxAsset.name);
+              if (sigUrl) {
+                const sigResponse = await fetch(sigUrl);
+                const signature = await sigResponse.text();
+
+                platforms['linux-x86_64'] = {
+                  signature: signature.trim(),
+                  url: linuxAsset.browser_download_url
+                };
+              }
+            }
+
+            // Create latest.json
+            const latestJson = {
+              version: `v${version}`,
+              notes: release.body || 'See the CHANGELOG for details.',
+              pub_date: new Date().toISOString(),
+              platforms
+            };
+
+            // Write to file
+            fs.writeFileSync('latest.json', JSON.stringify(latestJson, null, 2));
+            console.log('Generated latest.json:');
+            console.log(JSON.stringify(latestJson, null, 2));
+
+      - name: Upload latest.json to release
+        uses: actions/github-script@v7
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const releaseId = process.env.release_id;
+
+            // Read the generated latest.json
+            const latestJson = fs.readFileSync('latest.json');
+
+            // Upload as release asset
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: 'latest.json',
+              data: latestJson
+            });
+
+            console.log('✓ Uploaded latest.json to release');
+
       - name: Publish release
         id: publish-release
         uses: actions/github-script@v7

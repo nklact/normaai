@@ -565,12 +565,6 @@ const ChatArea = ({ messages, onSendMessage, isLoading, isLoadingMessages, curre
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={(e) => {
-                // On iOS, scroll input into view when focused to ensure it's visible above keyboard
-                setTimeout(() => {
-                  e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 300);
-              }}
               placeholder={selectedFile ? "Dodajte komentar (opciono)..." : "Postavite pitanje o zakonu..."}
               disabled={isLoading || fileProcessing || isRecording}
               rows={1}

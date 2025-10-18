@@ -72,35 +72,6 @@ function App() {
     }
   }, []);
 
-  // Prevent iOS keyboard from pushing sticky header up (fallback for older iOS < 15)
-  useEffect(() => {
-    // Only on mobile devices
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile) return;
-
-    const handleFocus = () => {
-      // Prevent page scroll when keyboard opens
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-      }, 100);
-    };
-
-    // Add focus listener to all inputs, textareas, and selects
-    const inputs = document.querySelectorAll('input, textarea, select');
-    inputs.forEach(input => {
-      input.addEventListener('focus', handleFocus);
-    });
-
-    // Cleanup
-    return () => {
-      inputs.forEach(input => {
-        input.removeEventListener('focus', handleFocus);
-      });
-    };
-  }, []); // Run once on mount
-
   // Detect keyboard open/close to adjust bottom padding
   useEffect(() => {
     // Only on mobile devices

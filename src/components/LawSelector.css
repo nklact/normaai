@@ -231,8 +231,10 @@
   }
 
   .law-selector {
-    position: sticky;
+    position: fixed; /* Fixed on mobile - more reliable with keyboard */
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 100;
     flex-shrink: 0; /* Don't shrink when keyboard appears */
     padding: 12px 16px;
