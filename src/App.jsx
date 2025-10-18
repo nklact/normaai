@@ -78,14 +78,46 @@ function App() {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (!isMobile || !window.visualViewport) return;
 
+    const isTauriIOS = window.__TAURI__ && /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+    // Tauri iOS: Use plugin events and prevent scroll
+    if (isTauriIOS) {
+      let unlistenWillShow, unlistenDidHide;
+
+      // Import Tauri event system
+      import('@tauri-apps/api/event').then(({ listen }) => {
+        // Listen for keyboard will show event
+        listen('keyboard-will-show', (event) => {
+          console.log('🎹 Keyboard will show, height:', event.payload.keyboardHeight);
+          document.documentElement.classList.add('keyboard-open');
+
+          // Prevent webview scroll by keeping scroll position at 0
+          const scrollableElement = document.querySelector('.main-content');
+          if (scrollableElement) {
+            scrollableElement.scrollTop = 0;
+          }
+          window.scrollTo(0, 0);
+        }).then(unlisten => { unlistenWillShow = unlisten; });
+
+        // Listen for keyboard did hide event
+        listen('keyboard-did-hide', () => {
+          console.log('🎹 Keyboard did hide');
+          document.documentElement.classList.remove('keyboard-open');
+        }).then(unlisten => { unlistenDidHide = unlisten; });
+      });
+
+      return () => {
+        if (unlistenWillShow) unlistenWillShow();
+        if (unlistenDidHide) unlistenDidHide();
+        document.documentElement.classList.remove('keyboard-open');
+      };
+    }
+
+    // Android and non-Tauri iOS: Use visual viewport
     const handleViewportResize = () => {
-      // When keyboard opens, visualViewport height decreases
-      // When keyboard closes, visualViewport height increases back to window height
       const viewportHeight = window.visualViewport.height;
       const windowHeight = window.innerHeight;
-
-      // Keyboard is considered "open" if viewport is significantly smaller than window
-      const keyboardOpen = viewportHeight < windowHeight - 100; // 100px threshold
+      const keyboardOpen = viewportHeight < windowHeight - 100;
 
       if (keyboardOpen) {
         document.documentElement.classList.add('keyboard-open');
@@ -94,17 +126,11 @@ function App() {
       }
     };
 
-    // Listen to viewport resize events
     window.visualViewport.addEventListener('resize', handleViewportResize);
-    window.visualViewport.addEventListener('scroll', handleViewportResize);
-
-    // Initial check
     handleViewportResize();
 
-    // Cleanup
     return () => {
       window.visualViewport.removeEventListener('resize', handleViewportResize);
-      window.visualViewport.removeEventListener('scroll', handleViewportResize);
       document.documentElement.classList.remove('keyboard-open');
     };
   }, []);

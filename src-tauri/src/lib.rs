@@ -187,6 +187,12 @@ pub fn run() {
             .plugin(tauri_plugin_process::init());
     }
 
+    // Add iOS keyboard plugin only on iOS
+    #[cfg(target_os = "ios")]
+    {
+        builder = builder.plugin(tauri_plugin_ios_keyboard::init());
+    }
+
     builder
         .invoke_handler({
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

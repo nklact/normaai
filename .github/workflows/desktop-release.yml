@@ -129,11 +129,13 @@ jobs:
             Write-Host "Renamed to: $targetFile"
             Write-Host "Uploading to FTP server..."
 
-            # Upload via FTP using curl with directory creation
+            # Upload via FTPS (FTP over TLS) using curl with directory creation
             $exitCode = 0
             curl.exe -T $targetFile `
               --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
+              --ftp-ssl `
               --ftp-create-dirs `
+              -k `
               -v `
               "ftp://normaai.rs/downloads/$targetFile"
             $exitCode = $LASTEXITCODE
@@ -147,6 +149,8 @@ jobs:
               # Try uploading to root if /downloads/ failed
               curl.exe -T $targetFile `
                 --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" `
+                --ftp-ssl `
+                -k `
                 -v `
                 "ftp://normaai.rs/$targetFile"
 

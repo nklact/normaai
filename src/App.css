@@ -103,7 +103,7 @@ svg {
 html,
 body {
   width: 100vw;
-  height: 100dvh; /* Use dynamic viewport - adapts to keyboard */
+  height: 100vh;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -374,8 +374,7 @@ textarea:focus {
 
   .main-content {
     margin-left: 0;
-    padding-top: 70px; /* Space for fixed law selector header */
-    overflow-y: auto; /* Enable scrolling */
+    overflow-y: auto; /* Enable scrolling for sticky to work */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
   }
