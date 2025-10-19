@@ -2,7 +2,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use objc2::{
     declare_class, msg_send_id, rc::Retained, runtime::{AnyObject, ProtocolObject},
-    mutability::MainThreadOnly, ClassType, DeclaredClass,
+    mutability::MainThreadOnly, ClassType, DefinedClass,
 };
 use objc2::runtime::NSObjectProtocol as NSObjectProtocolRuntime;
 use objc2_core_foundation::{CGPoint, CGRect};
@@ -138,7 +138,7 @@ declare_class!(
         const NAME: &'static str = "KeyboardScrollPreventDelegate";
     }
 
-    impl DeclaredClass for KeyboardScrollPreventDelegate {
+    impl DefinedClass for KeyboardScrollPreventDelegate {
         type Ivars = KeyboardScrollPreventDelegateIvars;
     }
 
