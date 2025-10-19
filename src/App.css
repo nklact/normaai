@@ -156,13 +156,21 @@ select {
   overflow: hidden; /* Extra insurance against scroll */
 }
 
-.keyboard-open .app {
-  padding-bottom: 8px;
-}
+/* On mobile: Use position fixed with visual viewport height when keyboard opens */
+@media (max-width: 768px) {
+  .keyboard-open .app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--viewport-height, 100vh);
+    padding-bottom: 8px;
+    transition: height 0.3s ease; /* Smooth animation */
+  }
 
-/* For Tauri iOS, use minimal padding when keyboard is open */
-.keyboard-open.tauri-ios .app {
-  padding-bottom: 8px;
+  .keyboard-open.tauri-ios .app {
+    padding-bottom: 8px;
+  }
 }
 
 .main-content {
@@ -382,14 +390,7 @@ textarea:focus {
     overflow-y: auto; /* Enable scrolling for sticky to work */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
-    transition: height 0.3s ease, max-height 0.3s ease; /* Smooth keyboard animation */
     touch-action: pan-y; /* Allow vertical scrolling inside content */
-  }
-
-  /* When keyboard is open, use visual viewport height to shrink content */
-  .keyboard-open .main-content {
-    height: var(--viewport-height, 100vh);
-    max-height: var(--viewport-height, 100vh);
   }
 }
 
