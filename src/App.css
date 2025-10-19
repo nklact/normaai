@@ -150,9 +150,14 @@ select {
   padding-bottom: 24px;
 }
 
-/* When keyboard is open, reduce bottom padding (keyboard provides spacing) */
+/* When keyboard is open, prevent body scroll and reduce bottom padding */
+.keyboard-open {
+  touch-action: none; /* Prevent touch scrolling on body */
+  overflow: hidden; /* Extra insurance against scroll */
+}
+
 .keyboard-open .app {
-  padding-bottom: 0;
+  padding-bottom: 8px;
 }
 
 /* For Tauri iOS, use minimal padding when keyboard is open */
@@ -377,6 +382,8 @@ textarea:focus {
     overflow-y: auto; /* Enable scrolling for sticky to work */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    transition: height 0.3s ease, max-height 0.3s ease; /* Smooth keyboard animation */
+    touch-action: pan-y; /* Allow vertical scrolling inside content */
   }
 
   /* When keyboard is open, use visual viewport height to shrink content */

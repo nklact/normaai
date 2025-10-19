@@ -1,7 +1,11 @@
 /* Prevent iOS from scrolling when input gets focus */
 @keyframes prevent-ios-scroll-on-focus {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .chat-area {
@@ -596,7 +600,7 @@
 
   .welcome-content > p {
     font-size: var(--text-sm);
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
 
   .welcome-content {
@@ -610,7 +614,7 @@
   .example-questions {
     font-size: var(--text-sm);
     padding: 16px 0;
-    margin-bottom: 12px;
+    margin-bottom: 4px;
     margin-left: -16px;
     margin-right: -16px;
   }
