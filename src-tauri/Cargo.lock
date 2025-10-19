@@ -2164,7 +2164,6 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-ios-keyboard",
  "tauri-plugin-opener",
  "tauri-plugin-process",
  "tauri-plugin-store",
@@ -3959,18 +3958,6 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.5",
  "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-ios-keyboard"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4efdcf9b5fa18d5683b4ba7354854c065350e3fc7de7bebee9a2752994abf561"
-dependencies = [
- "serde",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.16",
 ]
 
 [[package]]

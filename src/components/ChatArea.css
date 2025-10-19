@@ -1,3 +1,9 @@
+/* Prevent iOS from scrolling when input gets focus */
+@keyframes prevent-ios-scroll-on-focus {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
 .chat-area {
   flex: 1;
   display: flex;
@@ -242,6 +248,7 @@
 
 .message-input:focus {
   outline: none;
+  animation: prevent-ios-scroll-on-focus 0.01s; /* Prevent iOS scroll */
 }
 
 .message-input:disabled {

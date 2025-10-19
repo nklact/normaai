@@ -1,3 +1,9 @@
+/* Prevent iOS from scrolling when input gets focus */
+@keyframes prevent-ios-scroll-on-focus {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
 .law-selector {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
@@ -135,6 +141,7 @@
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgb(6 78 59 / 0.1);
+  animation: prevent-ios-scroll-on-focus 0.01s; /* Prevent iOS scroll */
 }
 
 .law-select::placeholder {
@@ -236,7 +243,6 @@
     z-index: 100;
     flex-shrink: 0; /* Don't shrink when keyboard appears */
     padding: 12px 16px;
-    padding-top: max(12px, env(safe-area-inset-top)); /* Respect notch/safe area */
     flex-direction: column;
     align-items: flex-start;
     min-height: auto;
