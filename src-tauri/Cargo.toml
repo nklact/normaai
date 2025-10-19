@@ -26,3 +26,11 @@ serde_json = "1"
 tauri-plugin-updater = "2.9.0"
 tauri-plugin-process = "2"
 
+# iOS-specific dependencies for keyboard scroll prevention
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.5"
+objc2-core-foundation = "0.3"
+objc2-foundation = "0.3"
+objc2-ui-kit = "0.3"
+block2 = "0.5"
+

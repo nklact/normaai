@@ -1,3 +1,7 @@
+// iOS-specific module for keyboard scroll prevention
+#[cfg(target_os = "ios")]
+mod webview_helper;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -188,6 +192,16 @@ pub fn run() {
     }
 
     builder
+        .setup(|app| {
+            // iOS: Prevent keyboard from scrolling webview and creating extra space
+            #[cfg(target_os = "ios")]
+            {
+                if let Some(webview_window) = app.get_webview_window("main") {
+                    webview_helper::disable_scroll_on_keyboard_show(&webview_window);
+                }
+            }
+            Ok(())
+        })
         .invoke_handler({
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {

@@ -451,9 +451,6 @@ const ChatArea = ({ messages, onSendMessage, isLoading, isLoadingMessages, curre
                   </div>
                 </div>
               </div>
-              <p className="start-hint">
-                Postavite pitanje u polje ispod za početak
-              </p>
             </div>
           </div>
         ) : (
