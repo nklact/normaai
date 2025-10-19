@@ -181,17 +181,17 @@ fn get_system_uuid() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build());
-
-    // Add updater and process plugins only on desktop platforms
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        builder = builder
-            .plugin(tauri_plugin_updater::Builder::new().build())
-            .plugin(tauri_plugin_process::init());
-    }
 
     builder
         .setup(|app| {

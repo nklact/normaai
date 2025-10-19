@@ -1,16 +1,15 @@
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, ptr::NonNull, sync::Arc};
 
 use objc2::{
-    declare_class, msg_send_id, rc::Retained, runtime::{AnyObject, ProtocolObject},
-    mutability::MainThreadOnly, ClassType, DefinedClass,
+    define_class, msg_send, rc::Retained, runtime::ProtocolObject, MainThreadOnly,
 };
-use objc2::runtime::NSObjectProtocol as NSObjectProtocolRuntime;
-use objc2_core_foundation::{CGPoint, CGRect};
+use objc2_core_foundation::CGPoint;
 use objc2_foundation::{
-    MainThreadMarker, NSDictionary, NSNotification, NSNotificationCenter, NSNotificationName,
-    NSObject, NSObjectProtocol, NSString, NSValue,
+    MainThreadMarker, NSNotification, NSNotificationCenter, NSNotificationName,
+    NSObject, NSObjectProtocol, NSString,
 };
 use objc2_ui_kit::{
+    NSValueUIGeometryExtensions,
     UIKeyboardDidShowNotification, UIKeyboardWillHideNotification, UIKeyboardWillShowNotification,
     UIScrollView, UIScrollViewContentInsetAdjustmentBehavior, UIScrollViewDelegate,
 };
@@ -56,7 +55,8 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
 
                 KEYBOARD_SCROLL_PREVENT_DELEGATE.with(|cell| {
                     if let Some(delegate) = cell.borrow().as_ref() {
-                        let delegate_obj = ProtocolObject::from_ref(&**delegate);
+                        let delegate_obj: &ProtocolObject<dyn UIScrollViewDelegate> =
+                            ProtocolObject::from_ref(&**delegate);
                         webview.scrollView().setDelegate(Some(delegate_obj));
                     }
                 });
@@ -98,8 +98,7 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                     None => return,
                 };
 
-                // SAFETY: Cast AnyObject to NSValue
-                let value: &NSValue = unsafe { std::mem::transmute(value) };
+                // Use the NSValueUIGeometryExtensions trait to get CGRectValue
                 let keyboard_rect = value.CGRectValue();
 
                 let mut frame = webview.frame();
@@ -124,29 +123,24 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
     });
 }
 
+#[derive(Debug)]
 pub struct KeyboardScrollPreventDelegateIvars {
     pub scroll_view: Arc<Retained<UIScrollView>>,
     pub offset: CGPoint,
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "KeyboardScrollPreventDelegate"]
+    #[ivars = KeyboardScrollPreventDelegateIvars]
     pub struct KeyboardScrollPreventDelegate;
-
-    unsafe impl ClassType for KeyboardScrollPreventDelegate {
-        type Super = NSObject;
-        type Mutability = MainThreadOnly;
-        const NAME: &'static str = "KeyboardScrollPreventDelegate";
-    }
-
-    impl DefinedClass for KeyboardScrollPreventDelegate {
-        type Ivars = KeyboardScrollPreventDelegateIvars;
-    }
 
     unsafe impl NSObjectProtocol for KeyboardScrollPreventDelegate {}
 
     unsafe impl UIScrollViewDelegate for KeyboardScrollPreventDelegate {
         #[method(scrollViewDidScroll:)]
-        unsafe fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
+        fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
             self.ivars().scroll_view.setContentOffset(self.ivars().offset);
         }
     }
@@ -163,7 +157,7 @@ impl KeyboardScrollPreventDelegate {
             scroll_view,
             offset,
         });
-        unsafe { msg_send_id![super(this), init] }
+        unsafe { msg_send![super(this), init] }
     }
 }
 
@@ -172,8 +166,8 @@ fn create_observer(
     name: &NSNotificationName,
     handler: impl Fn(&NSNotification) + 'static,
 ) -> Retained<ProtocolObject<dyn NSObjectProtocol>> {
-    let block = block2::StackBlock::new(move |notification: &NSNotification| {
-        handler(notification);
+    let block = block2::StackBlock::new(move |notification: NonNull<NSNotification>| {
+        handler(unsafe { notification.as_ref() });
     });
     let block = block.copy();
 
