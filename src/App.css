@@ -362,7 +362,7 @@ textarea:focus {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.4);
   z-index: 999;
 }
 
@@ -377,6 +377,12 @@ textarea:focus {
     overflow-y: auto; /* Enable scrolling for sticky to work */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
+  /* When keyboard is open, use visual viewport height to shrink content */
+  .keyboard-open .main-content {
+    height: var(--viewport-height, 100vh);
+    max-height: var(--viewport-height, 100vh);
   }
 }
 

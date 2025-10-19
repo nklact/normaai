@@ -72,7 +72,7 @@ function App() {
     }
   }, []);
 
-  // Detect keyboard open/close to adjust bottom padding
+  // Detect keyboard open/close and adjust layout to fit available space
   useEffect(() => {
     // Only on mobile devices
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -82,6 +82,9 @@ function App() {
       const viewportHeight = window.visualViewport.height;
       const windowHeight = window.innerHeight;
       const keyboardOpen = viewportHeight < windowHeight - 100;
+
+      // Set CSS variable with visual viewport height (accounts for keyboard)
+      document.documentElement.style.setProperty('--viewport-height', `${viewportHeight}px`);
 
       if (keyboardOpen) {
         document.documentElement.classList.add('keyboard-open');
@@ -96,6 +99,7 @@ function App() {
     return () => {
       window.visualViewport.removeEventListener('resize', handleViewportResize);
       document.documentElement.classList.remove('keyboard-open');
+      document.documentElement.style.removeProperty('--viewport-height');
     };
   }, []);
 
