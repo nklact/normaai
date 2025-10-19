@@ -27,10 +27,11 @@ tauri-plugin-updater = "2.9.0"
 tauri-plugin-process = "2"
 
 # iOS-specific dependencies for keyboard scroll prevention
+# No explicit version constraints - use versions from Tauri's dependency tree
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2 = "0.5"
-objc2-core-foundation = "0.3"
-objc2-foundation = "0.3"
-objc2-ui-kit = "0.3"
-block2 = "0.5"
+objc2 = { version = "0.6" }
+objc2-core-foundation = { version = "0.3" }
+objc2-foundation = { version = "0.3" }
+objc2-ui-kit = { version = "0.3" }
+block2 = { version = "0.6" }
 
