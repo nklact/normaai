@@ -1,12 +1,12 @@
 use std::{cell::RefCell, ptr::NonNull, sync::Arc};
 
 use objc2::{
-    define_class, msg_send, rc::Retained, runtime::ProtocolObject, MainThreadOnly,
+    define_class, msg_send, rc::Retained, runtime::ProtocolObject, DefinedClass, MainThreadOnly,
 };
-use objc2_core_foundation::CGPoint;
+use objc2_core_foundation::{CGPoint, CGRect};
 use objc2_foundation::{
     MainThreadMarker, NSNotification, NSNotificationCenter, NSNotificationName,
-    NSObject, NSObjectProtocol, NSString,
+    NSObject, NSObjectProtocol, NSString, NSValue,
 };
 use objc2_ui_kit::{
     NSValueUIGeometryExtensions,
@@ -98,8 +98,8 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                     None => return,
                 };
 
-                // Use the NSValueUIGeometryExtensions trait to get CGRectValue
-                let keyboard_rect = value.CGRectValue();
+                // Cast to NSValue and get CGRect using msg_send
+                let keyboard_rect: CGRect = unsafe { msg_send![&*value, CGRectValue] };
 
                 let mut frame = webview.frame();
                 let mut keyboard_height = keyboard_height_arc_observer.lock().unwrap();
@@ -139,8 +139,8 @@ define_class!(
     unsafe impl NSObjectProtocol for KeyboardScrollPreventDelegate {}
 
     unsafe impl UIScrollViewDelegate for KeyboardScrollPreventDelegate {
-        #[method(scrollViewDidScroll:)]
-        fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
+        #[unsafe(method(scrollViewDidScroll:))]
+        unsafe fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
             self.ivars().scroll_view.setContentOffset(self.ivars().offset);
         }
     }
@@ -166,10 +166,9 @@ fn create_observer(
     name: &NSNotificationName,
     handler: impl Fn(&NSNotification) + 'static,
 ) -> Retained<ProtocolObject<dyn NSObjectProtocol>> {
-    let block = block2::StackBlock::new(move |notification: NonNull<NSNotification>| {
+    let block = block2::RcBlock::new(move |notification: NonNull<NSNotification>| {
         handler(unsafe { notification.as_ref() });
     });
-    let block = block.copy();
 
     unsafe { center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block) }
 }
