@@ -1,9 +1,3 @@
-/* Prevent iOS from scrolling when input gets focus */
-@keyframes prevent-ios-scroll-on-focus {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
 .law-selector {
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
@@ -141,7 +135,6 @@
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgb(6 78 59 / 0.1);
-  animation: prevent-ios-scroll-on-focus 0.01s; /* Prevent iOS scroll */
 }
 
 .law-select::placeholder {
