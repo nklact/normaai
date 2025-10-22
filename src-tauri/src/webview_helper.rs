@@ -30,7 +30,19 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
         scroll_view_arc
             .setContentInsetAdjustmentBehavior(UIScrollViewContentInsetAdjustmentBehavior::Never);
 
+        // Store original webview height and insets at startup
+        let original_frame = webview.frame();
+        let original_height_arc = Arc::new(original_frame.size.height);
+        let original_insets = scroll_view_arc.contentInset();
+        let original_bottom_inset_arc = Arc::new(original_insets.bottom);
+
         let keyboard_height_arc = Arc::new(std::sync::Mutex::new(0 as f64));
+
+        // Set webview's superview background to white to prevent black flash during keyboard animations
+        if let Some(superview) = webview.superview() {
+            use objc2_ui_kit::UIColor;
+            superview.setBackgroundColor(Some(&UIColor::whiteColor()));
+        }
 
         let scroll_view_arc_observer = scroll_view_arc.clone();
         let old_delegate_arc_observer = old_delegate_arc.clone();
@@ -65,24 +77,37 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
 
         let scroll_view_arc_observer = scroll_view_arc.clone();
         let keyboard_height_arc_observer = keyboard_height_arc.clone();
+        let original_height_arc_observer = original_height_arc.clone();
+        let original_bottom_inset_arc_observer = original_bottom_inset_arc.clone();
+        let old_delegate_arc_observer_hide = old_delegate_arc.clone();
         create_observer(
             &notification_center,
             &UIKeyboardWillHideNotification,
             move |_notification| {
+                // Restore to original height (not current + keyboard)
                 let mut frame = webview.frame();
-                let keyboard_height = keyboard_height_arc_observer.lock().unwrap();
-                frame.size.height += *keyboard_height;
+                frame.size.height = *original_height_arc_observer;
                 webview.setFrame(frame);
 
+                // Restore to original bottom inset (not current + keyboard)
                 let mut insets = scroll_view_arc_observer.contentInset();
-                insets.bottom += *keyboard_height;
+                insets.bottom = *original_bottom_inset_arc_observer;
                 scroll_view_arc_observer.setContentInset(insets);
+
+                // Restore original scroll delegate when keyboard fully hides
+                let mut old_delegate = old_delegate_arc_observer_hide.lock().unwrap();
+                if let Some(delegate) = old_delegate.take() {
+                    scroll_view_arc_observer.setDelegate(Some(delegate.as_ref()));
+                } else {
+                    scroll_view_arc_observer.setDelegate(None);
+                }
             },
         );
 
         let scroll_view_arc_observer = scroll_view_arc.clone();
-        let old_delegate_arc_observer = old_delegate_arc.clone();
         let keyboard_height_arc_observer = keyboard_height_arc.clone();
+        let original_height_arc_observer = original_height_arc.clone();
+        let original_bottom_inset_arc_observer = original_bottom_inset_arc.clone();
         create_observer(
             &notification_center,
             &UIKeyboardDidShowNotification,
@@ -101,23 +126,20 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                 // Cast to NSValue and get CGRect using msg_send
                 let keyboard_rect: CGRect = unsafe { msg_send![&*value, CGRectValue] };
 
+                // Calculate from original height (not current frame) to prevent double-shrinking
                 let mut frame = webview.frame();
                 let mut keyboard_height = keyboard_height_arc_observer.lock().unwrap();
                 *keyboard_height = keyboard_rect.size.height;
-                frame.size.height -= *keyboard_height;
+                frame.size.height = *original_height_arc_observer - *keyboard_height;
                 webview.setFrame(frame);
 
+                // Calculate from original inset (not current inset) to prevent double-shrinking
                 let mut insets = scroll_view_arc_observer.contentInset();
-                insets.bottom -= *keyboard_height;
+                insets.bottom = *original_bottom_inset_arc_observer - *keyboard_height;
                 scroll_view_arc_observer.setContentInset(insets);
 
-                let mut old_delegate = old_delegate_arc_observer.lock().unwrap();
-
-                if let Some(delegate) = old_delegate.take() {
-                    scroll_view_arc_observer.setDelegate(Some(delegate.as_ref()));
-                } else {
-                    scroll_view_arc_observer.setDelegate(None);
-                }
+                // Keep scroll-preventing delegate active until keyboard fully hides
+                // (delegate restoration moved to UIKeyboardWillHideNotification)
             },
         );
     });
