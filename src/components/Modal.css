@@ -49,6 +49,10 @@
   flex-shrink: 0; /* Prevent header from shrinking */
 }
 
+.modal-tabs {
+  flex-shrink: 0; /* Prevent tabs from shrinking - keeps them fixed */
+}
+
 .modal-title {
   font-size: var(--text-lg);
   font-weight: 600;
@@ -163,7 +167,7 @@
 .auth-tabs {
   display: flex;
   border-bottom: 1px solid var(--border-color);
-  margin: -20px -24px 20px -24px;
+  margin: 0; /* No negative margins needed since tabs are now outside modal-body */
 }
 
 .auth-tab {

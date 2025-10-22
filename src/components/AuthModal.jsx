@@ -235,31 +235,33 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
     }, 200);
   };
 
+  const tabsContent = activeTab !== 'forgot' ? (
+    <div className="auth-tabs">
+      <button
+        className={`auth-tab ${activeTab === 'login' ? 'active' : ''}`}
+        onClick={() => switchTab('login')}
+        disabled={isLoading}
+      >
+        Prijava
+      </button>
+      <button
+        className={`auth-tab ${activeTab === 'register' ? 'active' : ''}`}
+        onClick={() => switchTab('register')}
+        disabled={isLoading}
+      >
+        Registracija
+      </button>
+    </div>
+  ) : null;
+
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={handleClose} 
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
       title={activeTab === 'login' ? 'Prijava' : activeTab === 'register' ? 'Registracija' : 'Resetovanje lozinke'}
       type="auth"
+      tabs={tabsContent}
     >
-      {activeTab !== 'forgot' && (
-        <div className="auth-tabs">
-          <button 
-            className={`auth-tab ${activeTab === 'login' ? 'active' : ''}`}
-            onClick={() => switchTab('login')}
-            disabled={isLoading}
-          >
-            Prijava
-          </button>
-          <button 
-            className={`auth-tab ${activeTab === 'register' ? 'active' : ''}`}
-            onClick={() => switchTab('register')}
-            disabled={isLoading}
-          >
-            Registracija
-          </button>
-        </div>
-      )}
 
       {reason === 'trial_exhausted' && activeTab !== 'forgot' && (
         <div className="auth-reason-message">

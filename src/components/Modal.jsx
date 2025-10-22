@@ -2,7 +2,7 @@ import React from 'react';
 import Icon from './Icons';
 import './Modal.css';
 
-const Modal = ({ isOpen, onClose, title, children, type = 'default' }) => {
+const Modal = ({ isOpen, onClose, title, children, type = 'default', tabs = null }) => {
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -44,6 +44,11 @@ const Modal = ({ isOpen, onClose, title, children, type = 'default' }) => {
             <span className="modal-close-x">✕</span>
           </button>
         </div>
+        {tabs && (
+          <div className="modal-tabs">
+            {tabs}
+          </div>
+        )}
         <div className="modal-body">
           {children}
         </div>
