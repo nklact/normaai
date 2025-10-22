@@ -33,7 +33,7 @@ jobs:
         run: npm ci
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0"
+        run: cargo install tauri-cli --version "2.8.4"
 
       - name: Update Tauri config with Team ID
         env:
