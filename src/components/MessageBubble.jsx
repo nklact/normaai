@@ -1,16 +1,26 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Icon from './Icons';
 import ContractDownloadButton from './ContractDownloadButton';
+import { submitMessageFeedback } from '../services/api';
 import './MessageBubble.css';
 
-const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPlanSelection }) => {
+const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPlanSelection, onRegenerateResponse }) => {
   // Get initial state from localStorage, default to false (collapsed)
   const [isReferencesExpanded, setIsReferencesExpanded] = useState(() => {
     const saved = localStorage.getItem('norma_ai_references_expanded');
     return saved === 'true';
   });
+
+  // Feedback state - initialize from message data
+  const [feedback, setFeedback] = useState(message.message_feedback || null);
+  const [notification, setNotification] = useState(null);
+
+  // Update feedback state if message prop changes
+  useEffect(() => {
+    setFeedback(message.message_feedback || null);
+  }, [message.message_feedback]);
 
   // Save preference to localStorage whenever it changes
   const handleToggleReferences = () => {
@@ -32,6 +42,83 @@ const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPla
       }, 100); // Small delay to allow DOM to render
     }
   };
+
+  // Show temporary notification
+  const showNotification = (text) => {
+    setNotification(text);
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Handle copy functionality - copies full message with references
+  const handleCopy = async () => {
+    try {
+      // Copy the complete formatted message with references
+      const fullMessage = message.content;
+
+      await navigator.clipboard.writeText(fullMessage);
+      showNotification('Odgovor kopiran sa referencama!');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      showNotification('Greška pri kopiranju');
+    }
+  };
+
+  // Handle regenerate response functionality
+  const handleRegenerate = async () => {
+    try {
+      if (onRegenerateResponse) {
+        showNotification('Regenerisanje odgovora...');
+        await onRegenerateResponse(message.id);
+      }
+    } catch (error) {
+      console.error('Failed to regenerate:', error);
+      showNotification('Greška pri regenerisanju');
+    }
+  };
+
+  // Handle feedback submission
+  const handleFeedback = async (feedbackType) => {
+    try {
+      console.log('🔍 DEBUG: Submitting feedback', {
+        messageId: message.id,
+        feedbackType,
+        currentFeedback: feedback
+      });
+
+      // If clicking the same feedback, do nothing (don't allow un-setting)
+      if (feedback === feedbackType) {
+        console.log('🔍 DEBUG: Same feedback clicked, ignoring');
+        return;
+      }
+
+      // Optimistically update UI
+      setFeedback(feedbackType);
+
+      // Submit to backend
+      console.log('🔍 DEBUG: Calling submitMessageFeedback API...');
+      const response = await submitMessageFeedback(message.id, feedbackType);
+      console.log('🔍 DEBUG: API response:', response);
+
+      if (response.success) {
+        if (feedbackType === 'positive') {
+          showNotification('Hvala na pozitivnoj povratnoj informaciji!');
+        } else {
+          showNotification('Hvala što ste nam pomogli da se poboljšamo!');
+        }
+      }
+    } catch (error) {
+      console.error('❌ ERROR: Failed to submit feedback:', error);
+      console.error('❌ ERROR details:', {
+        message: error.message,
+        stack: error.stack,
+        fullError: error
+      });
+      // Revert on error
+      setFeedback(message.message_feedback || null);
+      showNotification('Greška pri slanju povratnih informacija');
+    }
+  };
+
   // Enhanced function to render markdown text
   const renderText = (text) => {
     if (!text) return text;
@@ -104,6 +191,31 @@ const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPla
         <div className="ai-response">
           <div className="ai-answer">
             {renderText(answer)}
+          </div>
+          {/* Message action buttons */}
+          <div className="message-actions">
+            <button onClick={handleCopy} className="feedback-btn" title="Kopiraj odgovor" aria-label="Kopiraj odgovor">
+              <Icon name="copy" size={16} />
+            </button>
+            <button
+              onClick={() => handleFeedback('positive')}
+              className={`feedback-btn ${feedback === 'positive' ? 'active positive' : ''}`}
+              title="Dobar odgovor"
+              aria-label="Dobar odgovor"
+            >
+              <Icon name="thumbsUp" size={16} />
+            </button>
+            <button
+              onClick={() => handleFeedback('negative')}
+              className={`feedback-btn ${feedback === 'negative' ? 'active negative' : ''}`}
+              title="Loš odgovor"
+              aria-label="Loš odgovor"
+            >
+              <Icon name="thumbsDown" size={16} />
+            </button>
+            <button onClick={handleRegenerate} className="feedback-btn" title="Regeneriši odgovor" aria-label="Regeneriši odgovor">
+              <Icon name="refreshCw" size={16} />
+            </button>
           </div>
           {/* Display contract download button if available */}
           {message.generated_contract && (
@@ -205,6 +317,31 @@ const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPla
           <div className="ai-answer">
             {renderText(cleanContent)}
           </div>
+          {/* Message action buttons */}
+          <div className="message-actions">
+            <button onClick={handleCopy} className="feedback-btn" title="Kopiraj odgovor" aria-label="Kopiraj odgovor">
+              <Icon name="copy" size={16} />
+            </button>
+            <button
+              onClick={() => handleFeedback('positive')}
+              className={`feedback-btn ${feedback === 'positive' ? 'active positive' : ''}`}
+              title="Dobar odgovor"
+              aria-label="Dobar odgovor"
+            >
+              <Icon name="thumbsUp" size={16} />
+            </button>
+            <button
+              onClick={() => handleFeedback('negative')}
+              className={`feedback-btn ${feedback === 'negative' ? 'active negative' : ''}`}
+              title="Loš odgovor"
+              aria-label="Loš odgovor"
+            >
+              <Icon name="thumbsDown" size={16} />
+            </button>
+            <button onClick={handleRegenerate} className="feedback-btn" title="Regeneriši odgovor" aria-label="Regeneriši odgovor">
+              <Icon name="refreshCw" size={16} />
+            </button>
+          </div>
           {/* Display contract download button if available */}
           {message.generated_contract && (
             <ContractDownloadButton
@@ -252,6 +389,12 @@ const MessageBubble = ({ message, isUser, userStatus, onOpenAuthModal, onOpenPla
       <div className="message-content">
         {formatMessageContent(message.content)}
       </div>
+      {/* Notification popup */}
+      {notification && (
+        <div className="feedback-notification">
+          {notification}
+        </div>
+      )}
     </div>
   );
 };

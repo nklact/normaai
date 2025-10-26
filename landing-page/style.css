@@ -273,6 +273,12 @@ p {
   color: #0d0d0d;
 }
 
+.stat-text {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0d0d0d;
+}
+
 .stat-label {
   font-size: 0.875rem;
   color: #8f8f8f;
@@ -684,7 +690,6 @@ p {
 .faq-question {
   width: 100%;
   padding: 24px;
-  background: none;
   border: none;
   text-align: left;
   display: flex;
@@ -695,6 +700,7 @@ p {
   font-weight: 600;
   color: #0d0d0d;
   transition: all 0.3s ease;
+  background: #fff;
 }
 
 .faq-question:hover {
@@ -721,6 +727,7 @@ p {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease, padding 0.3s ease;
+  background: #fff;
 }
 
 .faq-answer.active {
@@ -802,6 +809,20 @@ p {
   font-weight: 700;
   color: white;
   margin-bottom: 16px;
+}
+
+.footer-tagline {
+  margin-bottom: 1rem; /* razmak ispod tagline */
+}
+
+.footer-contact .email-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.footer-contact {
+  font-size: 0.875rem;
 }
 
 .footer-links {
@@ -1674,116 +1695,115 @@ p {
   }
 }
 
-
 /* Download Page Styles */
 .download-section {
-    padding: 80px 0;
+  padding: 80px 0;
 }
 
 .download-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 32px;
-    margin-top: 48px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+  margin-top: 48px;
 }
 
 .download-card {
-    background: #fff;
-    border: 2px solid #f0f0f0;
-    border-radius: 16px;
-    padding: 40px;
-    text-align: center;
-    transition: all 0.3s ease;
+  background: #fff;
+  border: 2px solid #f0f0f0;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  transition: all 0.3s ease;
 }
 
 .download-card:hover {
-    border-color: #000;
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  border-color: #000;
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
 }
 
 .download-icon {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .download-icon svg {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .download-card h3 {
-    font-size: 24px;
-    margin-bottom: 12px;
-    color: #000;
+  font-size: 24px;
+  margin-bottom: 12px;
+  color: #000;
 }
 
 .download-card p {
-    color: #666;
-    margin-bottom: 24px;
-    line-height: 1.6;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.6;
 }
 
 .app-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .app-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 14px 28px;
-    background: #000;
-    color: #fff;
-    border-radius: 12px;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    border: 1px solid #000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 28px;
+  background: #064e3b;
+  color: #fff;
+  border-radius: 12px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: 1px solid #064e3b;
 }
 
 .app-button:hover {
-    background: #1a1a1a;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  background: #0a5e40;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(6, 78, 59, 0.3);
 }
 
 .app-button svg {
-    width: 24px;
-    height: 24px;
+  width: 24px;
+  height: 24px;
 }
 
 .download-features {
-    list-style: none;
-    padding: 0;
-    margin: 24px 0 0 0;
-    text-align: left;
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0 0;
+  text-align: left;
 }
 
 .download-features li {
-    padding: 8px 0;
-    color: #666;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  padding: 8px 0;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .download-features li::before {
-    content: "✓";
-    color: #000;
-    font-weight: bold;
+  content: "✓";
+  color: #000;
+  font-weight: bold;
 }
 
 @media (max-width: 768px) {
-    .download-grid {
-        grid-template-columns: 1fr;
-    }
+  .download-grid {
+    grid-template-columns: 1fr;
+  }
 }

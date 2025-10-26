@@ -6,7 +6,7 @@ import { TypingSkeleton, ChatSkeleton } from './Skeleton';
 import './ChatArea.css';
 import { extractTextFromFile, processExtractedText, isFileTypeSupported, isFileSizeValid, formatFileSize, getFileTypeDisplayName } from '../utils/fileTextExtractor';
 
-const ChatArea = ({ messages, onSendMessage, isLoading, isLoadingMessages, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated }) => {
+const ChatArea = ({ messages, onSendMessage, onRegenerateResponse, isLoading, isLoadingMessages, currentChatId, userStatus, onOpenPlanSelection, onOpenAuthModal, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -465,6 +465,7 @@ const ChatArea = ({ messages, onSendMessage, isLoading, isLoadingMessages, curre
                       userStatus={userStatus}
                       onOpenAuthModal={onOpenAuthModal}
                       onOpenPlanSelection={onOpenPlanSelection}
+                      onRegenerateResponse={onRegenerateResponse}
                     />
                   ))
                 )}

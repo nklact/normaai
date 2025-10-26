@@ -5,13 +5,13 @@ use objc2::{
 };
 use objc2_core_foundation::{CGPoint, CGRect};
 use objc2_foundation::{
-    MainThreadMarker, NSNotification, NSNotificationCenter, NSNotificationName,
-    NSObject, NSObjectProtocol, NSString,
+    MainThreadMarker, NSNotification, NSNotificationCenter, NSNotificationName, NSObject,
+    NSObjectProtocol, NSString,
 };
 use objc2_ui_kit::{
-    NSValueUIGeometryExtensions, UIColor,
-    UIKeyboardDidShowNotification, UIKeyboardWillHideNotification, UIKeyboardWillShowNotification,
-    UIScrollView, UIScrollViewContentInsetAdjustmentBehavior, UIScrollViewDelegate,
+    NSValueUIGeometryExtensions, UIColor, UIKeyboardDidShowNotification,
+    UIKeyboardWillHideNotification, UIKeyboardWillShowNotification, UIScrollView,
+    UIScrollViewContentInsetAdjustmentBehavior, UIScrollViewDelegate,
 };
 use tauri::WebviewWindow;
 
@@ -164,7 +164,9 @@ define_class!(
     unsafe impl UIScrollViewDelegate for KeyboardScrollPreventDelegate {
         #[unsafe(method(scrollViewDidScroll:))]
         unsafe fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
-            self.ivars().scroll_view.setContentOffset(self.ivars().offset);
+            self.ivars()
+                .scroll_view
+                .setContentOffset(self.ivars().offset);
         }
     }
 );

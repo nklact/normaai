@@ -2,21 +2,10 @@ import React, { useState } from 'react';
 import Modal from './Modal';
 import Icon from './Icons';
 import apiService from '../services/api';
-import { formatDistanceToNow } from 'date-fns';
-import { sr } from 'date-fns/locale';
-import emailjs from '@emailjs/browser';
-
-// EmailJS Configuration - Replace with your actual EmailJS credentials
-const EMAILJS_CONFIG = {
-  SERVICE_ID: 'YOUR_SERVICE_ID', // Replace with your EmailJS service ID
-  TEMPLATE_ID_VERIFICATION: 'YOUR_VERIFICATION_TEMPLATE_ID', // Replace with verification template ID
-  TEMPLATE_ID_RESET: 'YOUR_RESET_TEMPLATE_ID', // Replace with password reset template ID
-  USER_ID: 'YOUR_USER_ID' // Replace with your EmailJS user ID
-};
 
 const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = null }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
-  
+
   // Update activeTab when modal opens with new initialTab
   React.useEffect(() => {
     if (isOpen) {
@@ -37,53 +26,6 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
   const [fieldErrors, setFieldErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // EmailJS helper function
-  const sendVerificationEmail = async (email, token) => {
-    try {
-      const verificationUrl = `${window.location.origin}/verify-email?token=${token}`;
-      
-      await emailjs.send(
-        EMAILJS_CONFIG.SERVICE_ID,
-        EMAILJS_CONFIG.TEMPLATE_ID_VERIFICATION,
-        {
-          to_email: email,
-          verification_url: verificationUrl,
-          app_name: 'Norma AI'
-        },
-        EMAILJS_CONFIG.USER_ID
-      );
-      
-      console.log('Verification email sent successfully via EmailJS');
-      return true;
-    } catch (error) {
-      console.error('Failed to send verification email via EmailJS:', error);
-      return false;
-    }
-  };
-
-  const sendPasswordResetEmail = async (email, token) => {
-    try {
-      const resetUrl = `${window.location.origin}/reset-password?token=${token}`;
-      
-      await emailjs.send(
-        EMAILJS_CONFIG.SERVICE_ID,
-        EMAILJS_CONFIG.TEMPLATE_ID_RESET,
-        {
-          to_email: email,
-          reset_url: resetUrl,
-          app_name: 'Norma AI'
-        },
-        EMAILJS_CONFIG.USER_ID
-      );
-      
-      console.log('Password reset email sent successfully via EmailJS');
-      return true;
-    } catch (error) {
-      console.error('Failed to send password reset email via EmailJS:', error);
-      return false;
-    }
-  };
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -141,7 +83,7 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -152,39 +94,17 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
 
     try {
       let result;
-      
+
       if (activeTab === 'login') {
         result = await apiService.login(formData.email, formData.password);
         setSuccess('Uspešno ste se prijavili!');
       } else if (activeTab === 'register') {
         result = await apiService.register(formData.email, formData.password);
-        
-        // Send verification email via EmailJS if token is provided
-        if (result.verification_token) {
-          const emailSent = await sendVerificationEmail(formData.email, result.verification_token);
-          if (emailSent) {
-            setSuccess(result.message || 'Uspešno ste se registrovali! Proverite email za verifikaciju.');
-          } else {
-            setSuccess((result.message || 'Uspešno ste se registrovali!') + ' Greška slanja email-a za verifikaciju.');
-          }
-        } else {
-          setSuccess(result.message || 'Uspešno ste se registrovali!');
-        }
+        setSuccess(result.message || 'Uspešno ste se registrovali! Proverite email za verifikaciju.');
       } else if (activeTab === 'forgot') {
         result = await apiService.forgotPassword(formData.email);
-        
-        // Send password reset email via EmailJS if token is provided
-        if (result.reset_token && result.email) {
-          const emailSent = await sendPasswordResetEmail(result.email, result.reset_token);
-          if (emailSent) {
-            setSuccess('Instrukcije za resetovanje lozinke su poslane na email.');
-          } else {
-            setSuccess('Greška slanja email-a. Pokušajte ponovo.');
-          }
-        } else {
-          setSuccess(result.message || 'Ako email postoji, instrukcije su poslane.');
-        }
-        
+        setSuccess(result.message || 'Instrukcije za resetovanje lozinke su poslane na email.');
+
         // Stay in forgot tab to show success message
         setTimeout(() => {
           setActiveTab('login');
@@ -209,6 +129,21 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
     } catch (err) {
       console.error('Auth error:', err);
       setError(err.message || 'Došlo je do greške. Pokušajte ponovo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Google login handler
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await apiService.signInWithGoogle();
+      // OAuth redirect will happen automatically
+    } catch (err) {
+      console.error('Google login error:', err);
+      setError(err.message || 'Google prijava nije uspela');
     } finally {
       setIsLoading(false);
     }
@@ -281,7 +216,8 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
             <Icon name="info" size={20} />
           </div>
           <div className="reason-text">
-            <p>Molimo registrujte se za nastavak.</p>
+            <strong>Dostigli ste maksimalan broj probnih naloga</strong>
+            <p>Vaša IP adresa je dostigla limit probnih naloga. Molimo registrujte se za nastavak korišćenja aplikacije.</p>
           </div>
         </div>
       )}
@@ -369,16 +305,42 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
           {isLoading ? (
             <>
               <div className="auth-loading"></div>
-              {activeTab === 'login' ? 'Prijavljivanje...' : 
-               activeTab === 'register' ? 'Registracija...' : 
+              {activeTab === 'login' ? 'Prijavljivanje...' :
+               activeTab === 'register' ? 'Registracija...' :
                'Slanje emaila...'}
             </>
           ) : (
-            activeTab === 'login' ? 'Prijavite se' : 
+            activeTab === 'login' ? 'Prijavite se' :
             activeTab === 'register' ? 'Registrujte se' :
             'Pošalji link za resetovanje'
           )}
         </button>
+
+        {/* Google login button - only show on login/register tabs */}
+        {activeTab !== 'forgot' && (
+          <>
+            <div className="social-divider">
+              <span>ili nastavite sa</span>
+            </div>
+
+            <div className="social-buttons">
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                className="social-button google"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.96v2.332C2.438 15.983 5.482 18 9 18z"/>
+                  <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.96 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                </svg>
+                Google
+              </button>
+            </div>
+          </>
+        )}
 
         {activeTab === 'login' && (
           <div className="forgot-password-link">

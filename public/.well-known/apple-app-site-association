@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "AL3V38N8H9.com.nikola.norma-ai",
+        "paths": ["/auth/callback"]
+      }
+    ]
+  }
+}

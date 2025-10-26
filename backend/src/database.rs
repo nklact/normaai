@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::simple_auth::verify_token;
+use crate::simple_auth::{verify_token, verify_any_token};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -12,6 +12,7 @@ use uuid::Uuid;
 type AppState = (PgPool, String, String); // (pool, api_key, jwt_secret)
 
 // Helper function to extract user information from headers
+// Note: This is synchronous and only extracts the token - actual verification happens async
 pub fn extract_user_info(
     headers: &axum::http::HeaderMap,
     jwt_secret: &str,
@@ -22,7 +23,8 @@ pub fn extract_user_info(
         .and_then(|header| header.to_str().ok())
         .map(|s| s.to_string());
 
-    // Then try to get user ID from JWT token
+    // Then try to get user ID from JWT token (custom tokens only for backwards compatibility)
+    // For Supabase tokens, use verify_user_from_headers_async instead
     let user_id = headers
         .get("Authorization")
         .and_then(|auth_header| auth_header.to_str().ok())
@@ -31,6 +33,23 @@ pub fn extract_user_info(
         .and_then(|claims| Uuid::parse_str(&claims.sub).ok());
 
     (user_id, device_fingerprint)
+}
+
+// Async version that supports both custom and Supabase tokens
+pub async fn verify_user_from_headers_async(
+    headers: &axum::http::HeaderMap,
+    jwt_secret: &str,
+    supabase_jwt_secret: Option<&str>,
+    pool: &sqlx::PgPool,
+) -> Option<Uuid> {
+    let token = headers
+        .get("Authorization")
+        .and_then(|auth_header| auth_header.to_str().ok())
+        .and_then(|auth_str| auth_str.strip_prefix("Bearer "))?;
+
+    verify_any_token(token, jwt_secret, supabase_jwt_secret, pool)
+        .await
+        .ok()
 }
 
 /// Get user by ID or device fingerprint from optimized schema
@@ -385,6 +404,16 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // Add message_feedback column for user feedback tracking
+    sqlx::query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_feedback VARCHAR(20) CHECK (message_feedback IN ('positive', 'negative'))")
+        .execute(pool)
+        .await?;
+
+    // Add index for message_feedback for analytics queries
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_feedback ON messages(message_feedback) WHERE message_feedback IS NOT NULL")
+        .execute(pool)
+        .await?;
+
     // Add cost tracking columns to existing users table (migration for existing databases)
     sqlx::query("ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_llm_cost_usd DECIMAL(10,2) DEFAULT 0.00")
         .execute(pool)
@@ -623,7 +652,7 @@ pub async fn get_messages_handler(
 
     // If ownership is verified, get the messages
     let messages = sqlx::query_as::<_, Message>(
-        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, contract_file_id, contract_type, contract_filename, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
+        "SELECT id, chat_id, role, content, law_name, has_document, document_filename, contract_file_id, contract_type, contract_filename, message_feedback, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC"
     )
     .bind(chat_id)
     .fetch_all(&pool)
@@ -1026,4 +1055,106 @@ pub async fn track_llm_cost(
     }
 
     Ok(())
+}
+
+/// Submit or update feedback for a message
+#[axum::debug_handler]
+pub async fn submit_message_feedback_handler(
+    State((pool, _, jwt_secret)): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Path(message_id): Path<i64>,
+    Json(request): Json<crate::models::SubmitFeedbackRequest>,
+) -> Result<ResponseJson<crate::models::SubmitFeedbackResponse>, StatusCode> {
+    println!("🔍 BACKEND: Feedback request received for message_id={}, feedback_type={}", message_id, request.feedback_type);
+
+    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
+    println!("🔍 BACKEND: User info - user_id={:?}, device_fingerprint={:?}", user_id, device_fingerprint.as_ref().map(|s| &s[..8]));
+
+    // Validate feedback_type
+    if request.feedback_type != "positive" && request.feedback_type != "negative" {
+        println!("❌ BACKEND: Invalid feedback_type: {}", request.feedback_type);
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // First, verify the message exists and user has access to it
+    // Get the chat_id for this message
+    let chat_id_result: Option<i64> = sqlx::query_scalar(
+        "SELECT chat_id FROM messages WHERE id = $1"
+    )
+    .bind(message_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to fetch message: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let chat_id = match chat_id_result {
+        Some(id) => id,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    // Verify user owns this chat
+    let chat_exists = if let Some(user_id) = user_id {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)",
+        )
+        .bind(chat_id)
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+    } else if let Some(device_fp) = device_fingerprint {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id IS NULL AND device_fingerprint = $2)"
+        )
+        .bind(chat_id)
+        .bind(device_fp)
+        .fetch_one(&pool)
+        .await
+    } else {
+        Ok(false)
+    };
+
+    let chat_exists = chat_exists.map_err(|e| {
+        eprintln!("Failed to verify chat ownership: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if !chat_exists {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if feedback already exists for this message
+    let existing_feedback: Option<String> = sqlx::query_scalar(
+        "SELECT message_feedback FROM messages WHERE id = $1"
+    )
+    .bind(message_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to check existing feedback: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let updated = existing_feedback.is_some() && existing_feedback.as_deref() != Some(&request.feedback_type);
+
+    // Update the feedback
+    sqlx::query(
+        "UPDATE messages SET message_feedback = $1 WHERE id = $2"
+    )
+    .bind(&request.feedback_type)
+    .execute(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("❌ BACKEND: Failed to update message feedback: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    println!("✅ BACKEND: Feedback submitted successfully for message_id={}, updated={}", message_id, updated);
+
+    Ok(ResponseJson(crate::models::SubmitFeedbackResponse {
+        success: true,
+        message: "Feedback submitted successfully".to_string(),
+        updated,
+    }))
 }

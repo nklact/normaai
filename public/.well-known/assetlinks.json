@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.nikola.norma_ai",
+      "sha256_cert_fingerprints": [
+        "F9:1E:19:B5:05:10:C2:B6:87:0B:D3:0C:4E:BD:5E:AF:91:E0:F3:70:7B:31:37:E9:42:F2:BB:0F:64:43:EA:C2"
+      ]
+    }
+  }
+]

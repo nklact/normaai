@@ -1,6 +1,6 @@
 // Dynamic import of Tauri API - only available in desktop builds
+import { createClient } from '@supabase/supabase-js';
 import { getDeviceFingerprint } from '../utils/deviceFingerprint.js';
-import * as persistentStorage from '../utils/persistentStorage.js';
 
 // Detect if we're running in Tauri (desktop) or web environment
 const isDesktop = window.__TAURI__;
@@ -8,153 +8,26 @@ const isDesktop = window.__TAURI__;
 // Base URL for API calls
 const API_BASE_URL = 'https://norma-ai.fly.dev'; // Always use Fly.io backend
 
-// Authentication token management
-class AuthTokenManager {
-  constructor() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.refreshPromise = null; // Prevent multiple simultaneous refresh attempts
-    this.initPromise = this.loadTokensFromStorage();
-  }
-
-  async loadTokensFromStorage() {
-    try {
-      this.accessToken = await persistentStorage.getItem('norma_ai_access_token');
-      this.refreshToken = await persistentStorage.getItem('norma_ai_refresh_token');
-    } catch (e) {
-      console.warn('Could not load tokens from storage');
+// Initialize Supabase client
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true
     }
   }
+);
 
-  async saveTokens(accessToken, refreshToken = null) {
-    this.accessToken = accessToken;
-    if (refreshToken !== null) {
-      this.refreshToken = refreshToken;
-    }
-
-    try {
-      if (accessToken) {
-        await persistentStorage.setItem('norma_ai_access_token', accessToken);
-      }
-      if (refreshToken) {
-        await persistentStorage.setItem('norma_ai_refresh_token', refreshToken);
-      }
-    } catch (e) {
-      console.warn('Could not save tokens to storage');
-    }
+// Listen for auth state changes and keep session synced
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Auth state changed:', event, session ? 'Session active' : 'No session');
+  if (event === 'SIGNED_OUT') {
+    console.log('User signed out');
   }
-
-  async clearTokens() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.refreshPromise = null;
-
-    try {
-      await persistentStorage.removeItem('norma_ai_access_token');
-      await persistentStorage.removeItem('norma_ai_refresh_token');
-    } catch (e) {
-      console.warn('Could not clear tokens from storage');
-    }
-  }
-
-  async getAuthHeaders() {
-    // Ensure tokens are loaded before checking
-    await this.initPromise;
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Device-Fingerprint': await getDeviceFingerprint()
-    };
-
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    return headers;
-  }
-
-  isAuthenticated() {
-    return !!this.accessToken;
-  }
-
-  async ensureInitialized() {
-    await this.initPromise;
-  }
-
-  /**
-   * Refresh the access token using the refresh token
-   */
-  async refreshAccessToken() {
-    // If refresh is already in progress, return the existing promise
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    if (!this.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    this.refreshPromise = this._performTokenRefresh();
-    
-    try {
-      const result = await this.refreshPromise;
-      this.refreshPromise = null;
-      return result;
-    } catch (error) {
-      this.refreshPromise = null;
-      throw error;
-    }
-  }
-
-  async _performTokenRefresh() {
-    const deviceFingerprint = await getDeviceFingerprint();
-
-    if (isDesktop) {
-      // For desktop, delegate to Tauri backend
-      const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke("auth_refresh", {
-        refreshToken: this.refreshToken,
-        deviceFingerprint
-      });
-      
-      if (result.success && result.access_token) {
-        this.saveTokens(result.access_token, result.refresh_token);
-        return result;
-      } else {
-        throw new Error(result.message || 'Token refresh failed');
-      }
-    } else {
-      // For web, make direct API call
-      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-Fingerprint': deviceFingerprint
-        },
-        body: JSON.stringify({ 
-          refresh_token: this.refreshToken,
-          device_fingerprint: deviceFingerprint 
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || `Token refresh failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success && result.access_token) {
-        this.saveTokens(result.access_token, result.refresh_token);
-        return result;
-      } else {
-        throw new Error(result.message || 'Token refresh failed');
-      }
-    }
-  }
-}
-
-const authManager = new AuthTokenManager();
+});
 
 /**
  * Unified API service that works in both Tauri desktop and web environments
@@ -163,34 +36,50 @@ class ApiService {
   // ==================== INTERNAL METHODS ====================
 
   /**
-   * Make an authenticated API call with automatic token refresh on 401
+   * Get auth headers with Supabase session token
+   */
+  async getAuthHeaders() {
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Device-Fingerprint': await getDeviceFingerprint()
+    };
+
+    // Get Supabase session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    return headers;
+  }
+
+  /**
+   * Make an authenticated API call with automatic Supabase token refresh
    */
   async makeAuthenticatedRequest(url, options = {}, retryCount = 0) {
     const maxRetries = 1;
-    
+
     try {
       const response = await fetch(url, {
         ...options,
         headers: {
-          ...(await authManager.getAuthHeaders()),
+          ...(await this.getAuthHeaders()),
           ...options.headers
         }
       });
 
-      // If we get a 401 and have a refresh token, try to refresh
-      if (response.status === 401 && retryCount < maxRetries && authManager.refreshToken) {
-        try {
-          console.log('Access token expired, attempting refresh...');
-          await authManager.refreshAccessToken();
-          
-          // Retry the original request with the new token
-          return this.makeAuthenticatedRequest(url, options, retryCount + 1);
-        } catch (refreshError) {
-          console.warn('Token refresh failed:', refreshError.message);
-          // Clear tokens since refresh failed
-          authManager.clearTokens();
+      // If we get a 401, Supabase will auto-refresh the token
+      // Just retry the request once
+      if (response.status === 401 && retryCount < maxRetries) {
+        console.log('Got 401, refreshing session and retrying...');
+        const { data: { session }, error } = await supabase.auth.refreshSession();
+
+        if (error || !session) {
           throw new Error('Session expired. Please log in again.');
         }
+
+        // Retry the original request with the new token
+        return this.makeAuthenticatedRequest(url, options, retryCount + 1);
       }
 
       return response;
@@ -206,90 +95,116 @@ class ApiService {
   // ==================== AUTHENTICATION METHODS ====================
 
   /**
-   * Register a new user account
+   * Register a new user account with email/password
    */
   async register(email, password) {
     const deviceFingerprint = await getDeviceFingerprint();
-    
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("auth_register", {
-        email,
-        password,
-        deviceFingerprint
-      });
-    } else {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: await authManager.getAuthHeaders(),
-        body: JSON.stringify({ 
-          email, 
-          password, 
-          device_fingerprint: deviceFingerprint 
-        })
-      });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Registration failed: ${response.status}`);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          device_fingerprint: deviceFingerprint
+        }
       }
+    });
 
-      const result = await response.json();
-
-      // Save tokens if successful
-      if (result.success && result.access_token) {
-        authManager.saveTokens(result.access_token, result.refresh_token);
+    if (error) {
+      // Translate Supabase error messages to Serbian
+      let errorMessage = 'Registracija nije uspela';
+      if (error.message.includes('User already registered')) {
+        errorMessage = 'Email je već registrovan';
+      } else if (error.message.includes('Password should be')) {
+        errorMessage = 'Lozinka mora imati najmanje 6 karaktera';
+      } else if (error.message.includes('invalid email')) {
+        errorMessage = 'Nevažeća email adresa';
       }
-
-      return result;
+      throw new Error(errorMessage);
     }
+
+    return {
+      success: true,
+      message: data.user?.identities?.length === 0
+        ? 'Email je već registrovan. Prijavite se.'
+        : 'Uspešno ste se registrovali! Proverite email za verifikaciju.',
+      user: data.user,
+      session: data.session
+    };
   }
 
   /**
    * Login with email and password
    */
   async login(email, password) {
-    const deviceFingerprint = await getDeviceFingerprint();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("auth_login", {
-        email,
-        password,
-        deviceFingerprint
-      });
-    } else {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: await authManager.getAuthHeaders(),
-        body: JSON.stringify({
-          email,
-          password,
-          device_fingerprint: deviceFingerprint
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Login failed: ${response.status}`);
+    if (error) {
+      // Translate Supabase error messages to Serbian
+      let errorMessage = 'Prijava nije uspela';
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = 'Neispravni podaci za prijavu';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = 'Email nije potvrđen';
+      } else if (error.message.includes('User not found')) {
+        errorMessage = 'Korisnik nije pronađen';
       }
-
-      const result = await response.json();
-
-      // Save tokens if successful
-      if (result.success && result.access_token) {
-        authManager.saveTokens(result.access_token, result.refresh_token);
-      }
-
-      return result;
+      throw new Error(errorMessage);
     }
+
+    return {
+      success: true,
+      message: 'Uspešno ste se prijavili!',
+      user: data.user,
+      session: data.session
+    };
   }
 
   /**
-   * Logout and clear tokens
+   * Sign in with Google
+   */
+  async signInWithGoogle() {
+    const deviceFingerprint = await getDeviceFingerprint();
+
+    // Always use current origin for redirect
+    const redirectUrl = `${window.location.origin}`;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+        data: {
+          device_fingerprint: deviceFingerprint
+        }
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Google prijava nije uspela');
+    }
+
+    return data;
+  }
+
+
+  /**
+   * Logout and clear session
    */
   async logout() {
-    authManager.clearTokens();
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error('Logout error:', error);
+      throw new Error(error.message || 'Logout failed');
+    }
+
     return { success: true, message: 'Uspešno ste se odjavili' };
   }
 
@@ -332,7 +247,7 @@ class ApiService {
     } else {
       const response = await fetch(`${API_BASE_URL}/api/trial/start`, {
         method: 'POST',
-        headers: await authManager.getAuthHeaders(),
+        headers: await this.getAuthHeaders(),
         body: JSON.stringify({ device_fingerprint: deviceFingerprint })
       });
 
@@ -340,17 +255,24 @@ class ApiService {
       
       if (!response.ok) {
         let errorText = '';
+        let errorCode = '';
         try {
           const responseText = await response.text();
           console.error('🔍 DEBUG: Error response text:', responseText);
           try {
             const errorJson = JSON.parse(responseText);
+            errorCode = errorJson.error || '';
             errorText = errorJson.message || `Trial start failed: ${response.status}`;
           } catch (jsonError) {
             errorText = responseText || `Trial start failed: ${response.status}`;
           }
         } catch (readError) {
           errorText = `Trial start failed: ${response.status}`;
+        }
+
+        // Include error code in the error message for easier detection
+        if (errorCode === 'IP_LIMIT_EXCEEDED') {
+          throw new Error(`IP_LIMIT_EXCEEDED: ${errorText}`);
         }
         throw new Error(errorText);
       }
@@ -365,70 +287,60 @@ class ApiService {
    * Request password reset
    */
   async forgotPassword(email) {
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("forgot_password", { email });
-    } else {
-      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Forgot password failed: ${response.status}`);
-      }
-
-      return await response.json();
+    if (error) {
+      throw new Error(error.message || 'Failed to send password reset email');
     }
+
+    return {
+      success: true,
+      message: 'Instrukcije za resetovanje lozinke su poslate na email.'
+    };
   }
 
   /**
-   * Reset password with token
+   * Reset password (when user follows email link)
    */
-  async resetPassword(token, newPassword) {
-    if (isDesktop) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke("reset_password", { token, newPassword });
-    } else {
-      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token, 
-          new_password: newPassword 
-        })
-      });
+  async resetPassword(newPassword) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Reset password failed: ${response.status}`);
-      }
-
-      return await response.json();
+    if (error) {
+      throw new Error(error.message || 'Failed to reset password');
     }
+
+    return {
+      success: true,
+      message: 'Lozinka je uspešno promenjena'
+    };
   }
 
   /**
    * Check if user is authenticated
    */
-  isAuthenticated() {
-    return authManager.isAuthenticated();
+  async isAuthenticated() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
   }
 
   /**
    * Get current access token
    */
-  getAccessToken() {
-    return authManager.accessToken;
+  async getAccessToken() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
   }
 
   /**
-   * Ensure auth manager is initialized
+   * Get current user
    */
-  async ensureInitialized() {
-    await authManager.ensureInitialized();
+  async getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
   }
 
   // ==================== EXISTING METHODS WITH AUTH HEADERS ====================
@@ -445,7 +357,7 @@ class ApiService {
       console.log('🔍 DEBUG: apiService.createChat() - making HTTP request');
       const response = await fetch(`${API_BASE_URL}/api/chats`, {
         method: 'POST',
-        headers: await authManager.getAuthHeaders(),
+        headers: await this.getAuthHeaders(),
         body: JSON.stringify({
           title,
           device_fingerprint: await getDeviceFingerprint()
@@ -798,6 +710,47 @@ class ApiService {
   }
 
   /**
+   * Submit feedback for a message
+   * @param {number} messageId - The message ID
+   * @param {string} feedbackType - 'positive' or 'negative'
+   * @returns {Promise} Response with success status
+   */
+  async submitMessageFeedback(messageId, feedbackType) {
+    console.log('🔍 API SERVICE: submitMessageFeedback called', {
+      messageId,
+      feedbackType,
+      url: `${API_BASE_URL}/api/messages/${messageId}/feedback`
+    });
+
+    const requestBody = { feedback_type: feedbackType };
+    console.log('🔍 API SERVICE: Request body', requestBody);
+
+    try {
+      const response = await this.makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/messages/${messageId}/feedback`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('🔍 API SERVICE: Response received', result);
+      return result;
+    } catch (error) {
+      console.error('❌ API SERVICE ERROR:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Process payment (placeholder)
    */
   async processPayment(planId, paymentData) {
@@ -833,3 +786,9 @@ class ApiService {
 // Export a singleton instance
 export const apiService = new ApiService();
 export default apiService;
+
+// Export Supabase client for direct access (e.g., in AuthModal)
+export { supabase };
+
+// Named exports for convenience - bind context to preserve 'this'
+export const submitMessageFeedback = apiService.submitMessageFeedback.bind(apiService);

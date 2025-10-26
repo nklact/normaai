@@ -39,6 +39,10 @@ async fn main() {
     let jwt_secret = env::var("JWT_SECRET")
         .unwrap_or_else(|_| "default-jwt-secret-key-change-in-production".to_string());
 
+    // Supabase configuration (optional - for social login and unified auth)
+    let supabase_url = env::var("SUPABASE_URL").ok();
+    let supabase_jwt_secret = env::var("SUPABASE_JWT_SECRET").ok();
+
     // Connect to database with optimized pool settings for Fly.io auto-suspension
     // IMPORTANT: Use Supabase's Transaction pooler (port 6543) for auto-suspend compatibility
     let pool = PgPoolOptions::new()
@@ -92,7 +96,13 @@ async fn main() {
         .route("/api/subscription/cancel", post(simple_auth::cancel_subscription_handler))
         .route("/api/subscription/change-plan", put(simple_auth::change_plan_handler))
         .route("/api/subscription/billing-period", put(simple_auth::change_billing_period_handler))
-        .with_state((pool.clone(), openrouter_api_key.clone(), jwt_secret.clone()));
+        .with_state((
+            pool.clone(),
+            openrouter_api_key.clone(),
+            jwt_secret.clone(),
+            supabase_url.clone(),
+            supabase_jwt_secret.clone(),
+        ));
 
     // Database and scraper routes (3-element state)
     let database_routes = Router::new()
@@ -102,6 +112,7 @@ async fn main() {
         .route("/api/chats/:chat_id/title", put(database::update_chat_title_handler))
         .route("/api/chats/:chat_id/messages", get(database::get_messages_handler))
         .route("/api/messages", post(database::add_message_handler))
+        .route("/api/messages/:message_id/feedback", post(database::submit_message_feedback_handler))
         .route("/api/law-content", post(scraper::fetch_law_content_handler))
         .route("/api/cached-law", post(database::get_cached_law_handler))
         .with_state((pool.clone(), openrouter_api_key.clone(), jwt_secret.clone()));

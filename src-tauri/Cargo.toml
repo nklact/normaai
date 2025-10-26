@@ -1,6 +1,6 @@
 [package]
 name = "norma-ai"
-version = "0.3.44"
+version = "0.3.45"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-updater = "2.9.0"
 tauri-plugin-process = "2"
+tauri-plugin-deep-link = "2"
 
 # iOS-specific dependencies for keyboard scroll prevention
 # No explicit version constraints - use versions from Tauri's dependency tree

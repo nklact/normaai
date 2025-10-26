@@ -53,3 +53,5 @@ norma-ai-updater.key.pub
 # Rust build artifacts
 backend/target/
 backend/Cargo.lock
+src-tauri/gen/android/keystore.properties
+*.keystore

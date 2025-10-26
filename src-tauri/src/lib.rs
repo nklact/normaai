@@ -50,7 +50,10 @@ fn get_system_machine_id() -> Result<String, String> {
         let result = String::from_utf8_lossy(&output.stdout);
         // Parse JSON to get hardware UUID
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&result) {
-            if let Some(hardware) = json["SPHardwareDataType"].as_array().and_then(|arr| arr.first()) {
+            if let Some(hardware) = json["SPHardwareDataType"]
+                .as_array()
+                .and_then(|arr| arr.first())
+            {
                 if let Some(uuid) = hardware["platform_UUID"].as_str() {
                     return Ok(uuid.to_string());
                 }
@@ -100,7 +103,10 @@ fn get_system_hardware_uuid() -> Result<String, String> {
 
         // Try PowerShell method for Windows
         let output = Command::new("powershell")
-            .args(&["-Command", "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"])
+            .args(&[
+                "-Command",
+                "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID",
+            ])
             .output()
             .map_err(|e| format!("Failed to run PowerShell: {}", e))?;
 
@@ -125,9 +131,12 @@ fn get_system_hardware_uuid() -> Result<String, String> {
             let result = String::from_utf8_lossy(&output.stdout);
             for line in result.lines() {
                 if line.contains("IOPlatformUUID") {
-                    if let Some(start) = line.find('"').and_then(|pos| line[pos+1..].find('"').map(|p| pos + p + 1)) {
-                        if let Some(end) = line[start+1..].find('"').map(|p| start + p + 1) {
-                            return Ok(line[start+1..end].to_string());
+                    if let Some(start) = line
+                        .find('"')
+                        .and_then(|pos| line[pos + 1..].find('"').map(|p| pos + p + 1))
+                    {
+                        if let Some(end) = line[start + 1..].find('"').map(|p| start + p + 1) {
+                            return Ok(line[start + 1..end].to_string());
                         }
                     }
                 }
@@ -137,8 +146,8 @@ fn get_system_hardware_uuid() -> Result<String, String> {
 
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
         use std::fs;
+        use std::process::Command;
 
         // Try DMI product UUID
         if let Ok(uuid) = fs::read_to_string("/sys/class/dmi/id/product_uuid") {
@@ -183,6 +192,7 @@ fn get_system_uuid() -> Result<String, String> {
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -190,6 +200,7 @@ pub fn run() {
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 

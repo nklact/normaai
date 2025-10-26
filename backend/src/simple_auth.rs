@@ -1,6 +1,6 @@
 // Simplified auth module without compile-time database validation
 use crate::api::extract_client_ip;
-use crate::database::{extract_user_info, get_user_status_optimized};
+use crate::database::get_user_status_optimized;
 use crate::models::*;
 use axum::{
     extract::State,
@@ -8,14 +8,14 @@ use axum::{
     Json,
 };
 use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, Algorithm};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, Row};
 use uuid::Uuid;
 use validator::Validate;
 
-// JWT Claims structure
+// JWT Claims structure (for custom tokens)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String, // user_id
@@ -24,8 +24,21 @@ pub struct Claims {
     pub iat: usize,
 }
 
+// Supabase JWT Claims structure
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupabaseClaims {
+    pub sub: String, // user_id in auth.users
+    pub email: Option<String>,
+    pub exp: usize,
+    pub iat: usize,
+    pub iss: Option<String>, // Issuer - should be Supabase URL
+    pub aud: Option<String>, // Audience
+    pub role: Option<String>,
+}
+
 // Application state for auth endpoints
-pub type AuthAppState = (Pool<Postgres>, String, String); // (database pool, openrouter_api_key, jwt_secret)
+// (database pool, openrouter_api_key, jwt_secret, supabase_url, supabase_jwt_secret)
+pub type AuthAppState = (Pool<Postgres>, String, String, Option<String>, Option<String>);
 
 // Generate JWT token
 pub fn generate_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<String, String> {
@@ -49,7 +62,7 @@ pub fn generate_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<St
     .map_err(|e| format!("Token generation failed: {}", e))
 }
 
-// Verify JWT token
+// Verify JWT token (custom tokens only - legacy)
 pub fn verify_token(token: &str, jwt_secret: &str) -> Result<Claims, String> {
     let validation = Validation::default();
     decode::<Claims>(
@@ -59,6 +72,61 @@ pub fn verify_token(token: &str, jwt_secret: &str) -> Result<Claims, String> {
     )
     .map(|data| data.claims)
     .map_err(|e| format!("Token verification failed: {}", e))
+}
+
+// Verify Supabase JWT token
+pub fn verify_supabase_token(
+    token: &str,
+    supabase_jwt_secret: &str,
+) -> Result<SupabaseClaims, String> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&["authenticated"]);
+    validation.validate_exp = true;
+
+    decode::<SupabaseClaims>(
+        token,
+        &DecodingKey::from_secret(supabase_jwt_secret.as_ref()),
+        &validation,
+    )
+    .map(|data| data.claims)
+    .map_err(|e| format!("Supabase token verification failed: {}", e))
+}
+
+// Unified token verification - tries Supabase first, then custom
+// Returns (user_id from auth.users, is_supabase_token)
+pub async fn verify_any_token(
+    token: &str,
+    jwt_secret: &str,
+    supabase_jwt_secret: Option<&str>,
+    pool: &Pool<Postgres>,
+) -> Result<Uuid, String> {
+    // Try Supabase token first if we have the secret
+    if let Some(supabase_secret) = supabase_jwt_secret {
+        if let Ok(claims) = verify_supabase_token(token, supabase_secret) {
+            // Parse Supabase user ID
+            let auth_user_id = Uuid::parse_str(&claims.sub)
+                .map_err(|_| "Invalid Supabase user ID in token".to_string())?;
+
+            // Look up user by auth_user_id
+            let user = sqlx::query_as::<_, User>(
+                "SELECT * FROM users WHERE auth_user_id = $1 AND account_status = 'active'"
+            )
+            .bind(auth_user_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| format!("Database error: {}", e))?
+            .ok_or_else(|| "User not found for Supabase token".to_string())?;
+
+            return Ok(user.id);
+        }
+    }
+
+    // Fall back to custom JWT verification
+    let claims = verify_token(token, jwt_secret)?;
+    let user_id = Uuid::parse_str(&claims.sub)
+        .map_err(|_| "Invalid user ID in custom token".to_string())?;
+
+    Ok(user_id)
 }
 
 // Check IP trial limits (max 3 trials per IP)
@@ -103,7 +171,7 @@ pub async fn check_ip_trial_limits(
 
 // Register endpoint
 pub async fn register_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -148,17 +216,15 @@ pub async fn register_handler(
         let trial_messages_remaining: Option<i32> =
             existing_device_trial.get("trial_messages_remaining");
         let new_user_id = Uuid::new_v4();
-        let trial_expires_at = chrono::Utc::now() + chrono::Duration::days(7);
 
         let insert_result = sqlx::query(
-            "INSERT INTO users (id, email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining) 
-             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), $5, $6)"
+            "INSERT INTO users (id, email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
+             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), NULL, $5)"
         )
         .bind(new_user_id)
         .bind(&request.email)
         .bind(&password_hash)
         .bind(&request.device_fingerprint)
-        .bind(trial_expires_at)
         .bind(trial_messages_remaining)
         .execute(&pool)
         .await;
@@ -167,17 +233,15 @@ pub async fn register_handler(
     } else {
         // Create new user if no trial user exists for this device
         let new_user_id = Uuid::new_v4();
-        let trial_expires_at = chrono::Utc::now() + chrono::Duration::days(7);
 
         let insert_result = sqlx::query(
             "INSERT INTO users (id, email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), $5, 5)"
+             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), NULL, 5)"
         )
         .bind(new_user_id)
         .bind(&request.email)
         .bind(&password_hash)
         .bind(&request.device_fingerprint)
-        .bind(trial_expires_at)
         .execute(&pool)
         .await;
 
@@ -279,7 +343,7 @@ pub async fn register_handler(
 
 // Login endpoint
 pub async fn login_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -367,10 +431,23 @@ pub async fn login_handler(
 
 // User status endpoint - uses optimized single-query approach
 pub async fn user_status_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<UserStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
+    // Try async verification first (supports both Supabase and custom tokens)
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await;
+
+    // Get device fingerprint
+    let device_fingerprint = headers
+        .get("X-Device-Fingerprint")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
 
     match get_user_status_optimized(user_id, device_fingerprint, &pool).await {
         Ok(status) => Ok(Json(status)),
@@ -390,7 +467,7 @@ pub async fn user_status_handler(
 
 // Refresh JWT token
 pub async fn refresh_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Get current token from Authorization header
@@ -498,7 +575,7 @@ pub async fn refresh_handler(
 
 // Forgot password endpoint
 pub async fn forgot_password_handler(
-    State((pool, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _)): State<AuthAppState>,
     Json(request): Json<ForgotPasswordRequest>,
 ) -> Result<Json<PasswordResetResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -582,7 +659,7 @@ pub async fn forgot_password_handler(
 
 // Reset password endpoint
 pub async fn reset_password_handler(
-    State((pool, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _)): State<AuthAppState>,
     Json(request): Json<ResetPasswordRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -681,7 +758,7 @@ pub async fn reset_password_handler(
 
 // Email verification endpoint
 pub async fn verify_email_handler(
-    State((pool, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _)): State<AuthAppState>,
     Json(request): Json<VerifyEmailRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Find and validate verification token
@@ -766,7 +843,7 @@ pub async fn logout_handler() -> Result<Json<MessageResponse>, (StatusCode, Json
 
 // Create premium subscription
 pub async fn create_subscription_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateSubscriptionRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -926,7 +1003,7 @@ pub async fn create_subscription_handler(
 
 // Get subscription status
 pub async fn subscription_status_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify JWT token
@@ -1055,7 +1132,7 @@ pub async fn subscription_status_handler(
 
 // Cancel subscription
 pub async fn cancel_subscription_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify JWT token
@@ -1124,7 +1201,7 @@ pub async fn cancel_subscription_handler(
 
 // Enhanced trial start endpoint with bypass detection
 pub async fn start_trial_handler(
-    State((pool, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _)): State<AuthAppState>,
     headers: HeaderMap,
     Json(request): Json<StartTrialRequest>,
 ) -> Result<Json<TrialResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1185,7 +1262,7 @@ pub async fn start_trial_handler(
         return Ok(Json(TrialResponse {
             success: true,
             trial_started_at,
-            trial_expires_at: trial_started_at + chrono::Duration::days(365), // Not used in new simplified system
+            trial_expires_at: None,
             messages_remaining: trial_messages_remaining.unwrap_or(0),
             message: format!(
                 "Uređaj već ima aktivan trial sa {} preostalih poruka",
@@ -1195,7 +1272,6 @@ pub async fn start_trial_handler(
     }
 
     // Create new unregistered trial user
-    let trial_expires_at = chrono::Utc::now() + chrono::Duration::days(7);
     let trial_email = format!(
         "unregistered_{}@trial.local",
         &request.device_fingerprint[0..8]
@@ -1205,11 +1281,11 @@ pub async fn start_trial_handler(
     // ON CONFLICT: If user was deleted but device_fingerprint exists, resurrect the record
     sqlx::query(
         "INSERT INTO users (email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-         VALUES ($1, '$2b$12$placeholder.hash.for.unregistered.users', 'trial_unregistered', $2, NOW(), $3, 5)
+         VALUES ($1, '$2b$12$placeholder.hash.for.unregistered.users', 'trial_unregistered', $2, NOW(), NULL, 5)
          ON CONFLICT (email) DO UPDATE SET
            device_fingerprint = EXCLUDED.device_fingerprint,
            trial_started_at = NOW(),
-           trial_expires_at = EXCLUDED.trial_expires_at,
+           trial_expires_at = NULL,
            trial_messages_remaining = 5,
            account_type = 'trial_unregistered',
            account_status = 'active',
@@ -1217,7 +1293,6 @@ pub async fn start_trial_handler(
     )
     .bind(&trial_email)
     .bind(&request.device_fingerprint)
-    .bind(trial_expires_at)
     .execute(&pool)
     .await
     .map_err(|e| {
@@ -1254,9 +1329,9 @@ pub async fn start_trial_handler(
     Ok(Json(TrialResponse {
         success: true,
         trial_started_at: chrono::Utc::now(),
-        trial_expires_at,
+        trial_expires_at: None,
         messages_remaining: 5, // New trial gets 5 messages
-        message: "Trial uspešno aktiviran za 7 dana".to_string(),
+        message: "Trial uspešno aktiviran".to_string(),
     }))
 }
 
@@ -1270,7 +1345,7 @@ pub struct StartTrialRequest {
 pub struct TrialResponse {
     pub success: bool,
     pub trial_started_at: chrono::DateTime<chrono::Utc>,
-    pub trial_expires_at: chrono::DateTime<chrono::Utc>,
+    pub trial_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub messages_remaining: i32, // Messages remaining for trial
     pub message: String,
 }
@@ -1325,7 +1400,7 @@ pub struct SubscriptionResponse {
 
 // Change plan endpoint
 pub async fn change_plan_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: HeaderMap,
     Json(request): Json<ChangePlanRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1480,7 +1555,7 @@ pub async fn change_plan_handler(
 
 // Change billing period endpoint
 pub async fn change_billing_period_handler(
-    State((pool, _, jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
     headers: HeaderMap,
     Json(request): Json<ChangeBillingPeriodRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {

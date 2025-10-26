@@ -103,14 +103,76 @@ function App() {
     };
   }, []);
 
+  // Handle deep link OAuth callback (for desktop/mobile)
+  const handleDeepLink = async (url) => {
+    try {
+      console.log('🔗 Processing deep link URL:', url);
+
+      // Extract hash from URL (format: https://chat.normaai.rs/auth/callback#access_token=...&...)
+      const urlObj = new URL(url);
+      const hash = urlObj.hash.substring(1); // Remove the # symbol
+
+      if (hash) {
+        const hashParams = new URLSearchParams(hash);
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        if (accessToken) {
+          console.log('✅ OAuth tokens extracted from deep link');
+
+          // Supabase client will automatically detect and store these tokens
+          // Refresh the auth state
+          const status = await apiService.getUserStatus();
+          setUserStatus(status);
+          const authenticated = await apiService.isAuthenticated();
+          setIsAuthenticated(authenticated);
+
+          console.log('✅ Authentication successful via deep link');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error processing deep link:', error);
+    }
+  };
+
   // Initialize authentication state
   const initializeAuth = async () => {
     try {
-      // Wait for auth manager to load tokens from storage
-      await apiService.ensureInitialized();
+      // Check for Supabase OAuth callback in URL hash (web version)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
 
-      // Check if user has stored token
-      const hasToken = apiService.isAuthenticated();
+      if (accessToken) {
+        console.log('🔍 OAuth callback detected, waiting for Supabase to process session...');
+        // Wait a bit for Supabase to process and store the session
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+
+      // For desktop/mobile apps: Listen for deep links
+      if (window.__TAURI__) {
+        const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+
+        // Listen for deep link events (when app is already open)
+        await onOpenUrl((urls) => {
+          console.log('🔗 Deep link received:', urls);
+          handleDeepLink(urls[0]);
+        });
+
+        // Check if app was opened via deep link
+        const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
+        const startUrls = await getCurrent();
+        if (startUrls && startUrls.length > 0) {
+          console.log('🔗 App opened via deep link:', startUrls);
+          handleDeepLink(startUrls[0]);
+        }
+      }
+
+      // Check if user is authenticated (Supabase handles token storage)
+      const hasToken = await apiService.isAuthenticated();
+      console.log('🔍 DEBUG: isAuthenticated returned:', hasToken);
 
       // Load user status
       const status = await apiService.getUserStatus();
@@ -660,6 +722,50 @@ function App() {
     }
   };
 
+  /**
+   * Regenerate an assistant's response by resending the previous user message
+   * @param {number} assistantMessageId - The ID of the assistant message to regenerate
+   */
+  const regenerateResponse = async (assistantMessageId) => {
+    try {
+      // Find the assistant message and the user message before it
+      const messageIndex = messages.findIndex(msg => msg.id === assistantMessageId);
+
+      if (messageIndex === -1 || messageIndex === 0) {
+        console.error('Cannot find message or no previous user message');
+        return;
+      }
+
+      // Find the user message that prompted this response (search backwards)
+      let userMessageIndex = messageIndex - 1;
+      while (userMessageIndex >= 0 && messages[userMessageIndex].role !== 'user') {
+        userMessageIndex--;
+      }
+
+      if (userMessageIndex < 0) {
+        console.error('Cannot find previous user message');
+        return;
+      }
+
+      const userMessage = messages[userMessageIndex];
+
+      // Remove the assistant message from the UI
+      setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
+
+      // Resend the user's question
+      await sendMessage({
+        question: userMessage.content,
+        documentContent: userMessage.has_document ? '[Document previously uploaded]' : null,
+        documentFilename: userMessage.document_filename || null
+      });
+
+    } catch (error) {
+      console.error('Error regenerating response:', error);
+      setErrorMessage('Greška pri regenerisanju odgovora');
+      setErrorDialogOpen(true);
+    }
+  };
+
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -708,6 +814,7 @@ function App() {
           <ChatArea
             messages={messages}
             onSendMessage={sendMessage}
+            onRegenerateResponse={regenerateResponse}
             isLoading={isLoading}
             isLoadingMessages={isLoadingMessages}
             currentChatId={currentChatId}

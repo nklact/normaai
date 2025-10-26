@@ -102,9 +102,9 @@ pub async fn start_trial_handler(
         Ok(trial) => Ok(Json(TrialResponse {
             success: true,
             trial_started_at: trial.trial_started_at,
-            trial_expires_at: trial.trial_expires_at,
+            trial_expires_at: None,
             messages_remaining: 5, // New trial gets 5 messages
-            message: "Trial uspešno aktiviran za 7 dana".to_string(),
+            message: "Trial uspešno aktiviran".to_string(),
         })),
         Err(error) => {
             let status = match error.error.as_str() {
@@ -127,7 +127,7 @@ pub struct StartTrialRequest {
 pub struct TrialResponse {
     pub success: bool,
     pub trial_started_at: chrono::DateTime<chrono::Utc>,
-    pub trial_expires_at: chrono::DateTime<chrono::Utc>,
+    pub trial_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub messages_remaining: i32, // Messages remaining for trial
     pub message: String,
 }

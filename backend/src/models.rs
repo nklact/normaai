@@ -25,6 +25,7 @@ pub struct Message {
     pub contract_file_id: Option<String>,
     pub contract_type: Option<String>,
     pub contract_filename: Option<String>,
+    pub message_feedback: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -55,6 +56,18 @@ pub struct AddMessageRequest {
     pub role: String,
     pub content: String,
     pub law_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitFeedbackRequest {
+    pub feedback_type: String, // 'positive' or 'negative'
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitFeedbackResponse {
+    pub success: bool,
+    pub message: String,
+    pub updated: bool, // true if feedback was changed from previous value
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -158,9 +171,13 @@ pub struct ErrorResponse {
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct User {
     pub id: Uuid,
+    pub auth_user_id: Option<Uuid>, // Link to Supabase auth.users(id)
     pub email: String,
-    pub password_hash: String,
+    pub password_hash: Option<String>, // Nullable for social login users
     pub email_verified: bool,
+    pub name: Option<String>, // User's full name (from social login or registration)
+    pub oauth_provider: Option<String>, // 'google', 'facebook', 'apple', NULL for email/password
+    pub oauth_profile_picture_url: Option<String>, // Avatar URL from OAuth provider
     pub account_type: String, // 'trial_unregistered', 'trial_registered', 'individual', 'professional', 'team', 'premium'
     pub account_status: String, // 'active', 'suspended', 'deleted'
     pub device_fingerprint: Option<String>,
