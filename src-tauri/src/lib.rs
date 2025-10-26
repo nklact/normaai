@@ -91,11 +91,13 @@ fn get_system_machine_id() -> Result<String, String> {
 
 // iOS: Not supported (mobile uses different device ID approach)
 #[cfg(target_os = "ios")]
+#[allow(dead_code)]
 fn get_system_machine_id() -> Result<String, String> {
     Err("Device ID not supported on iOS - use mobile device APIs instead".to_string())
 }
 
 // Fallback hardware UUID method
+#[allow(dead_code)]
 fn get_system_hardware_uuid() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {

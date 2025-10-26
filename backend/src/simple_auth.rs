@@ -8,7 +8,7 @@ use axum::{
     Json,
 };
 use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation, Algorithm};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, Row};
@@ -38,7 +38,13 @@ pub struct SupabaseClaims {
 
 // Application state for auth endpoints
 // (database pool, openrouter_api_key, jwt_secret, supabase_url, supabase_jwt_secret)
-pub type AuthAppState = (Pool<Postgres>, String, String, Option<String>, Option<String>);
+pub type AuthAppState = (
+    Pool<Postgres>,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+);
 
 // Generate JWT token
 pub fn generate_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<String, String> {
@@ -109,7 +115,7 @@ pub async fn verify_any_token(
 
             // Look up user by auth_user_id
             let user = sqlx::query_as::<_, User>(
-                "SELECT * FROM users WHERE auth_user_id = $1 AND account_status = 'active'"
+                "SELECT * FROM users WHERE auth_user_id = $1 AND account_status = 'active'",
             )
             .bind(auth_user_id)
             .fetch_optional(pool)
@@ -123,8 +129,8 @@ pub async fn verify_any_token(
 
     // Fall back to custom JWT verification
     let claims = verify_token(token, jwt_secret)?;
-    let user_id = Uuid::parse_str(&claims.sub)
-        .map_err(|_| "Invalid user ID in custom token".to_string())?;
+    let user_id =
+        Uuid::parse_str(&claims.sub).map_err(|_| "Invalid user ID in custom token".to_string())?;
 
     Ok(user_id)
 }
@@ -151,18 +157,21 @@ pub async fn check_ip_trial_limits(
     let ip_network = ipnetwork::IpNetwork::from(parsed_ip);
 
     let ip_trial = sqlx::query_as::<_, crate::models::IpTrialLimit>(
-        "SELECT id, ip_address, date, count, created_at FROM ip_trial_limits WHERE ip_address = $1"
+        "SELECT id, ip_address, date, count, created_at FROM ip_trial_limits WHERE ip_address = $1",
     )
-        .bind(ip_network)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
+    .bind(ip_network)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
                 error: "DATABASE_ERROR".to_string(),
                 message: "Greška provere IP adrese".to_string(),
                 details: Some(serde_json::json!({"details": e.to_string()})),
-            }))
-        })?;
+            }),
+        )
+    })?;
 
     // Return true if no record found (allowed) or count < 3 (allowed)
     // Return false if count >= 3 (blocked) - lifetime limit, not daily
@@ -319,11 +328,33 @@ pub async fn register_handler(
         }
         Err(e) => {
             if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
+                // Check if user registered with OAuth provider
+                let existing_user =
+                    sqlx::query("SELECT oauth_provider FROM users WHERE email = $1")
+                        .bind(&request.email)
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten();
+
+                let message = if let Some(user_row) = existing_user {
+                    let oauth_provider: Option<String> = user_row.get("oauth_provider");
+
+                    match oauth_provider.as_deref() {
+                        Some("google") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Google'.".to_string(),
+                        Some("facebook") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Facebook'.".to_string(),
+                        Some("apple") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Apple'.".to_string(),
+                        _ => "Email adresa već postoji. Molimo prijavite se.".to_string(),
+                    }
+                } else {
+                    "Email adresa već postoji. Molimo prijavite se.".to_string()
+                };
+
                 Err((
                     StatusCode::CONFLICT,
                     Json(ErrorResponse {
                         error: "EMAIL_EXISTS".to_string(),
-                        message: "Email adresa već postoji".to_string(),
+                        message,
                         details: None,
                     }),
                 ))
@@ -359,20 +390,21 @@ pub async fn login_handler(
     }
 
     // Find user
-    let row = sqlx::query("SELECT id, email, password_hash FROM users WHERE email = $1")
-        .bind(&request.email)
-        .fetch_optional(&pool)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
-                    message: "Greška baze podataka".to_string(),
-                    details: Some(serde_json::json!({"details": e.to_string()})),
-                }),
-            )
-        })?;
+    let row =
+        sqlx::query("SELECT id, email, password_hash, oauth_provider FROM users WHERE email = $1")
+            .bind(&request.email)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "DATABASE_ERROR".to_string(),
+                        message: "Greška baze podataka".to_string(),
+                        details: Some(serde_json::json!({"details": e.to_string()})),
+                    }),
+                )
+            })?;
 
     let user = row.ok_or_else(|| {
         (StatusCode::UNAUTHORIZED, Json(ErrorResponse {
@@ -385,6 +417,28 @@ pub async fn login_handler(
     let user_id: Uuid = user.get("id");
     let email: String = user.get("email");
     let stored_hash: String = user.get("password_hash");
+    let oauth_provider: Option<String> = user.get("oauth_provider");
+
+    // Check if user registered with OAuth only (no password)
+    if stored_hash.is_empty() || stored_hash == "$2b$12$placeholder.hash.for.unregistered.users" {
+        if let Some(provider) = oauth_provider {
+            let message = match provider.as_str() {
+                "google" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Google'.",
+                "facebook" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Facebook'.",
+                "apple" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Apple'.",
+                _ => "Email adresa već postoji. Molimo koristite opciju prijave sa kojom ste kreirali nalog.",
+            };
+
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "OAUTH_ACCOUNT".to_string(),
+                    message: message.to_string(),
+                    details: Some(serde_json::json!({"oauth_provider": provider})),
+                }),
+            ));
+        }
+    }
 
     // Verify password
     let password_valid = verify(&request.password, &stored_hash).map_err(|e| {

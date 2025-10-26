@@ -54,7 +54,7 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                 *old_delegate = scroll_view_will_show.delegate();
 
                 // SAFETY: This callback is guaranteed to be called on the main thread
-                let mtm = unsafe { MainThreadMarker::new_unchecked() };
+                let mtm = MainThreadMarker::new_unchecked();
                 let new_delegate = KeyboardScrollPreventDelegate::new(
                     mtm,
                     scroll_view_will_show.clone(),
@@ -95,8 +95,8 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                     None => return,
                 };
 
-                // Cast to NSValue and get CGRect using msg_send
-                let keyboard_rect: CGRect = unsafe { msg_send![&*value, CGRectValue] };
+                // Cast to NSValue and get CGRect using trait method
+                let keyboard_rect: CGRect = value.CGRectValue();
 
                 // Calculate from original height (not current frame) to prevent double-shrinking
                 let mut frame = webview.frame();
