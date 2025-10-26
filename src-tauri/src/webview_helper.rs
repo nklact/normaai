@@ -9,9 +9,9 @@ use objc2_foundation::{
     NSObjectProtocol, NSString,
 };
 use objc2_ui_kit::{
-    NSValueUIGeometryExtensions, UIColor, UIKeyboardDidShowNotification,
-    UIKeyboardWillHideNotification, UIKeyboardWillShowNotification, UIScrollView,
-    UIScrollViewContentInsetAdjustmentBehavior, UIScrollViewDelegate,
+    UIColor, UIKeyboardDidShowNotification, UIKeyboardWillHideNotification,
+    UIKeyboardWillShowNotification, UIScrollView, UIScrollViewContentInsetAdjustmentBehavior,
+    UIScrollViewDelegate,
 };
 use tauri::WebviewWindow;
 
@@ -95,8 +95,8 @@ pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
                     None => return,
                 };
 
-                // Cast to NSValue and get CGRect using trait method
-                let keyboard_rect: CGRect = value.CGRectValue();
+                // Cast to NSValue and get CGRect using msg_send
+                let keyboard_rect: CGRect = msg_send![&*value, CGRectValue];
 
                 // Calculate from original height (not current frame) to prevent double-shrinking
                 let mut frame = webview.frame();
