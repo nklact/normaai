@@ -55,7 +55,12 @@ function App() {
     Promise.all([
       initializeAuth(),
       loadChats()
-    ]);
+    ]).catch(error => {
+      // Catch any unhandled errors to prevent blank screen
+      console.error('❌ CRITICAL: App initialization failed:', error);
+      // Continue with app even if initialization partially fails
+      // This ensures the UI still renders even if auth/chats fail to load
+    });
   }, []);
 
   // Detect Tauri iOS app for platform-specific styling
@@ -153,20 +158,33 @@ function App() {
 
       // For desktop/mobile apps: Listen for deep links
       if (window.__TAURI__) {
-        const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+        try {
+          // Add timeout to prevent hanging on iOS if deep link plugin fails
+          await Promise.race([
+            (async () => {
+              const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
 
-        // Listen for deep link events (when app is already open)
-        await onOpenUrl((urls) => {
-          console.log('🔗 Deep link received:', urls);
-          handleDeepLink(urls[0]);
-        });
+              // Listen for deep link events (when app is already open)
+              await onOpenUrl((urls) => {
+                console.log('🔗 Deep link received:', urls);
+                handleDeepLink(urls[0]);
+              });
 
-        // Check if app was opened via deep link
-        const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
-        const startUrls = await getCurrent();
-        if (startUrls && startUrls.length > 0) {
-          console.log('🔗 App opened via deep link:', startUrls);
-          handleDeepLink(startUrls[0]);
+              // Check if app was opened via deep link
+              const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
+              const startUrls = await getCurrent();
+              if (startUrls && startUrls.length > 0) {
+                console.log('🔗 App opened via deep link:', startUrls);
+                handleDeepLink(startUrls[0]);
+              }
+            })(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Deep link initialization timeout')), 5000)
+            )
+          ]);
+        } catch (deepLinkError) {
+          // If deep link fails, log but continue - app should work without deep links
+          console.warn('⚠️ Deep link initialization failed, continuing without deep links:', deepLinkError);
         }
       }
 
