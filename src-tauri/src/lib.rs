@@ -215,22 +215,20 @@ pub fn run() {
                     webview_helper::disable_scroll_on_keyboard_show(&webview_window);
 
                     // Enable Safari Web Inspector for debugging (iOS 16.4+)
-                    #[cfg(debug_assertions)]
-                    {
-                        use objc2::rc::Retained;
-                        use objc2::runtime::AnyObject;
-                        use objc2::{msg_send_id, ClassType};
+                    // Note: Enabled in all builds (not just debug) for TestFlight debugging
+                    use objc2::rc::Retained;
+                    use objc2::runtime::AnyObject;
+                    use objc2::{msg_send_id, ClassType};
 
-                        let _ = webview_window.with_webview(|webview| {
-                            #[allow(deprecated)]
-                            unsafe {
-                                let wkwebview: Retained<AnyObject> = msg_send_id![webview.inner(), self];
-                                let _: () = msg_send_id![&wkwebview, setInspectable: true];
-                            }
-                        });
+                    let _ = webview_window.with_webview(|webview| {
+                        #[allow(deprecated)]
+                        unsafe {
+                            let wkwebview: Retained<AnyObject> = msg_send_id![webview.inner(), self];
+                            let _: () = msg_send_id![&wkwebview, setInspectable: true];
+                        }
+                    });
 
-                        println!("✅ iOS WebView inspector enabled");
-                    }
+                    println!("✅ iOS WebView inspector enabled");
                 }
             }
             Ok(())
