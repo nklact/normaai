@@ -109,64 +109,76 @@ function App() {
   }, []);
 
   // Handle deep link OAuth callback (for desktop/mobile)
+  // Supports PKCE flow (code in query params) - recommended for mobile/desktop
   const handleDeepLink = async (url) => {
     try {
       console.log('🔗 Processing deep link URL:', url);
 
-      // Extract hash from URL (format: https://chat.normaai.rs/auth/callback#access_token=...&...)
       const urlObj = new URL(url);
-      const hash = urlObj.hash.substring(1); // Remove the # symbol
 
-      if (hash) {
-        const hashParams = new URLSearchParams(hash);
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
+      // PKCE Flow: Check for authorization code in query parameters
+      const code = new URLSearchParams(urlObj.search).get('code');
 
-        if (accessToken) {
-          console.log('✅ OAuth tokens extracted from deep link');
+      if (code) {
+        console.log('🔐 PKCE authorization code detected, exchanging for session...');
 
-          // Set the session in Supabase client
-          const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            import.meta.env.VITE_SUPABASE_URL,
-            import.meta.env.VITE_SUPABASE_ANON_KEY
-          );
+        // Exchange PKCE code for session
+        // Supabase stores the code_verifier in storage and automatically uses it
+        const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
 
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
-
-          // Refresh the auth state
-          const status = await apiService.getUserStatus();
-          setUserStatus(status);
-          const authenticated = await apiService.isAuthenticated();
-          setIsAuthenticated(authenticated);
-
-          console.log('✅ Authentication successful via deep link');
-
-          // Close auth modal if open
-          setAuthModalOpen(false);
+        if (error) {
+          console.error('❌ Error exchanging PKCE code for session:', error);
+          setErrorMessage(`OAuth greška: ${error.message}`);
+          setErrorDialogOpen(true);
+          return;
         }
+
+        console.log('✅ PKCE session obtained successfully');
+
+        // Refresh the auth state
+        const status = await apiService.getUserStatus();
+        setUserStatus(status);
+        const authenticated = await apiService.isAuthenticated();
+        setIsAuthenticated(authenticated);
+
+        console.log('✅ Authentication successful via PKCE deep link');
+
+        // Close auth modal if open
+        setAuthModalOpen(false);
+      } else {
+        console.log('⚠️ No authorization code found in deep link');
       }
     } catch (error) {
       console.error('❌ Error processing deep link:', error);
+      setErrorMessage(`Greška pri obradi OAuth povratnog poziva: ${error.message}`);
+      setErrorDialogOpen(true);
     }
   };
 
   // Initialize authentication state
   const initializeAuth = async () => {
     try {
-      // Check for Supabase OAuth callback in URL hash (web version)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
+      // Check for OAuth callback code in URL (PKCE flow)
+      // This handles both web OAuth and fallback from callback.html when deep link fails
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
 
-      if (accessToken) {
-        console.log('🔍 OAuth callback detected, waiting for Supabase to process session...');
-        // Wait a bit for Supabase to process and store the session
-        await new Promise(resolve => setTimeout(resolve, 100));
-        // Clear the hash from URL
+      if (code) {
+        console.log('🔐 OAuth callback detected with PKCE code, exchanging for session...');
+
+        // Exchange PKCE code for session
+        const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          console.error('❌ Error exchanging code for session:', error);
+          setErrorMessage(`OAuth greška: ${error.message}`);
+          setErrorDialogOpen(true);
+        } else {
+          console.log('✅ OAuth session obtained successfully');
+          setAuthModalOpen(false);
+        }
+
+        // Clear the code from URL
         window.history.replaceState(null, '', window.location.pathname);
       }
 

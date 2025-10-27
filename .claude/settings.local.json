@@ -6,7 +6,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(npm run tauri:*)",
-      "Read(//c/Users/Nikola/Documents/**)"
+      "Read(//c/Users/Nikola/Documents/**)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:supabase.com)"
     ],
     "deny": [],
     "ask": []

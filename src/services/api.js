@@ -79,6 +79,9 @@ supabase.auth.onAuthStateChange((event, session) => {
  * Unified API service that works in both Tauri desktop and web environments
  */
 class ApiService {
+  // Expose Supabase client for direct access (needed for OAuth callbacks)
+  supabase = supabase;
+
   // ==================== INTERNAL METHODS ====================
 
   /**
@@ -210,37 +213,30 @@ class ApiService {
   }
 
   /**
-   * Sign in with Google - Opens system browser for OAuth (PKCE flow)
+   * Sign in with Google - Opens EXTERNAL browser for OAuth (PKCE flow)
    * Works on: Web, Desktop (Windows/Mac/Linux), Mobile (iOS/Android)
    *
    * Flow:
-   * 1. Opens system browser (Safari/Chrome) with Google OAuth
-   * 2. User authenticates with Google
-   * 3. Google redirects to https://chat.normaai.rs/auth/callback?code=xxx
-   * 4. On mobile: Universal Links/App Links intercept and open app
-   *    On desktop: Web page triggers deep link normaai://
-   *    On web: Normal redirect
-   * 5. AuthCallback component exchanges code for session using PKCE
+   * 1. Get OAuth URL from Supabase with skipBrowserRedirect: true
+   * 2. Manually open EXTERNAL browser (not webview) using Tauri opener plugin
+   * 3. User authenticates with Google in external browser
+   * 4. Google redirects to callback URL
+   * 5. Deep link/Universal Link brings user back to app
+   * 6. App handles callback and exchanges PKCE code for session
    */
   async signInWithGoogle() {
     const deviceFingerprint = await getDeviceFingerprint();
 
-    // Determine redirect URL based on platform
-    let redirectUrl;
-    if (window.__TAURI__) {
-      // For Tauri apps (desktop & mobile), redirect to our domain
-      // which will be caught by deep links / universal links
-      redirectUrl = 'https://chat.normaai.rs/auth/callback';
-    } else {
-      // For web, use current origin
-      redirectUrl = `${window.location.origin}/auth/callback`;
-    }
+    // For all platforms: Always redirect to web domain
+    // Google OAuth doesn't support custom URL schemes (normaai://)
+    // For Tauri apps: The web page will trigger deep link to open the app
+    const redirectUrl = 'https://chat.normaai.rs/auth/callback';
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
-        skipBrowserRedirect: false, // Let Supabase open system browser automatically
+        skipBrowserRedirect: true, // CRITICAL: Must be true for Tauri to prevent webview opening
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -255,9 +251,14 @@ class ApiService {
       throw new Error(error.message || 'Google prijava nije uspela');
     }
 
-    // Supabase will automatically open the system browser
-    // The OAuth URL will open in Safari (iOS), Chrome (Android), or default browser (Desktop)
-    // This avoids the 403 disallowed_useragent error from embedded webviews
+    // For Tauri apps: Manually open OAuth URL in EXTERNAL browser
+    // This is required because skipBrowserRedirect: true prevents automatic opening
+    if (window.__TAURI__ && data.url) {
+      console.log('🌐 Opening external browser for OAuth:', data.url);
+      const { open } = await import('@tauri-apps/plugin-opener');
+      await open(data.url);
+    }
+    // For web: Browser will automatically redirect (skipBrowserRedirect is false behavior)
 
     return data;
   }
