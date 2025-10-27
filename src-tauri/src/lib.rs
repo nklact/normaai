@@ -216,15 +216,15 @@ pub fn run() {
 
                     // Enable Safari Web Inspector for debugging (iOS 16.4+)
                     // Note: Enabled in all builds (not just debug) for TestFlight debugging
-                    use objc2::rc::Retained;
+                    use objc2::{msg_send, sel};
                     use objc2::runtime::AnyObject;
-                    use objc2::{msg_send_id, ClassType};
 
                     let _ = webview_window.with_webview(|webview| {
-                        #[allow(deprecated)]
                         unsafe {
-                            let wkwebview: Retained<AnyObject> = msg_send_id![webview.inner(), self];
-                            let _: () = msg_send_id![&wkwebview, setInspectable: true];
+                            let webview_ptr = webview.inner() as *mut AnyObject;
+                            if !webview_ptr.is_null() {
+                                let _: () = msg_send![webview_ptr, setInspectable: true];
+                            }
                         }
                     });
 
