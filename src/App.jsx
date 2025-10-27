@@ -125,7 +125,18 @@ function App() {
         if (accessToken) {
           console.log('✅ OAuth tokens extracted from deep link');
 
-          // Supabase client will automatically detect and store these tokens
+          // Set the session in Supabase client
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            import.meta.env.VITE_SUPABASE_URL,
+            import.meta.env.VITE_SUPABASE_ANON_KEY
+          );
+
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+
           // Refresh the auth state
           const status = await apiService.getUserStatus();
           setUserStatus(status);
@@ -133,6 +144,9 @@ function App() {
           setIsAuthenticated(authenticated);
 
           console.log('✅ Authentication successful via deep link');
+
+          // Close auth modal if open
+          setAuthModalOpen(false);
         }
       }
     } catch (error) {

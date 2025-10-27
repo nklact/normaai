@@ -169,13 +169,21 @@ class ApiService {
   async signInWithGoogle() {
     const deviceFingerprint = await getDeviceFingerprint();
 
-    // Always use current origin for redirect
-    const redirectUrl = `${window.location.origin}`;
+    // Determine redirect URL based on platform
+    let redirectUrl;
+    if (window.__TAURI__) {
+      // For Tauri apps, use the deep link callback
+      redirectUrl = 'https://chat.normaai.rs/auth/callback';
+    } else {
+      // For web, use current origin
+      redirectUrl = `${window.location.origin}/auth/callback`;
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        skipBrowserRedirect: window.__TAURI__, // Don't auto-redirect in Tauri, we'll open external browser
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -188,6 +196,12 @@ class ApiService {
 
     if (error) {
       throw new Error(error.message || 'Google prijava nije uspela');
+    }
+
+    // For Tauri apps, open OAuth URL in external browser
+    if (window.__TAURI__ && data.url) {
+      const { open } = await import('@tauri-apps/plugin-opener');
+      await open(data.url);
     }
 
     return data;
