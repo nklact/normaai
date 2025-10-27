@@ -3,7 +3,17 @@ import { supabase } from '../services/api';
 
 /**
  * AuthCallback component handles OAuth redirects from social login providers
- * It exchanges the auth code for a session and redirects back to the app
+ * Supports both PKCE flow (mobile/desktop) and implicit flow (legacy/web)
+ *
+ * PKCE Flow (Recommended):
+ * - URL contains: ?code=xxx
+ * - Exchange code for session using exchangeCodeForSession()
+ * - More secure, works with system browser
+ *
+ * Implicit Flow (Legacy):
+ * - URL contains: #access_token=xxx
+ * - Session available from getSession()
+ * - Less secure, deprecated for mobile
  */
 const AuthCallback = ({ onSuccess }) => {
   const [error, setError] = useState(null);
@@ -12,32 +22,67 @@ const AuthCallback = ({ onSuccess }) => {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the session from the URL hash
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Check if we have a PKCE code in the URL query params
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
 
-        if (error) {
-          throw error;
-        }
+        if (code) {
+          // PKCE flow - exchange code for session
+          console.log('🔐 PKCE code detected, exchanging for session...');
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-        if (session) {
-          console.log('Auth callback successful, session:', session);
+          if (error) {
+            throw error;
+          }
+
+          console.log('✅ PKCE session obtained:', data.session);
 
           // Call onSuccess callback if provided
           if (onSuccess) {
             onSuccess({
               success: true,
-              user: session.user,
-              session: session
+              user: data.session.user,
+              session: data.session
             });
           }
 
-          // Redirect to main app
-          window.location.href = '/';
+          // Redirect based on platform
+          if (window.__TAURI__) {
+            // For Tauri, navigate within the app
+            window.location.href = '/';
+          } else {
+            // For web, normal redirect
+            window.location.href = '/';
+          }
         } else {
-          throw new Error('No session found');
+          // Implicit flow - get session from URL hash (legacy/web)
+          console.log('🔓 Checking for implicit flow session...');
+          const { data: { session }, error } = await supabase.auth.getSession();
+
+          if (error) {
+            throw error;
+          }
+
+          if (session) {
+            console.log('✅ Implicit flow session found:', session);
+
+            // Call onSuccess callback if provided
+            if (onSuccess) {
+              onSuccess({
+                success: true,
+                user: session.user,
+                session: session
+              });
+            }
+
+            // Redirect to main app
+            window.location.href = '/';
+          } else {
+            throw new Error('No session found in URL');
+          }
         }
       } catch (error) {
-        console.error('Auth callback error:', error);
+        console.error('❌ Auth callback error:', error);
         setError(error.message || 'Authentication failed');
         setLoading(false);
 

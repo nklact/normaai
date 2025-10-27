@@ -208,6 +208,48 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Register deep link handler for OAuth callback
+            // Handles: normaai://auth/callback (desktop) and https://chat.normaai.rs/auth/callback (mobile)
+            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux", target_os = "ios", target_os = "android"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+
+                // Register all deep links from config
+                app.deep_link().register_all().unwrap_or_else(|e| {
+                    eprintln!("❌ Failed to register deep links: {}", e);
+                });
+
+                let app_handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let url = event.urls().first().unwrap().to_string();
+                    println!("🔗 Deep link received: {}", url);
+
+                    // Forward the URL to the webview so it can handle the OAuth callback
+                    // This navigates the webview to the callback URL which triggers AuthCallback component
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        // Convert deep link to HTTPS URL for consistency
+                        // normaai://auth/callback?code=xxx -> https://chat.normaai.rs/auth/callback?code=xxx
+                        let navigation_url = if url.starts_with("normaai://") {
+                            url.replace("normaai://", "https://chat.normaai.rs/")
+                        } else {
+                            url.clone()
+                        };
+
+                        println!("🔄 Navigating webview to: {}", navigation_url);
+
+                        let js = format!(
+                            "window.location.href = '{}';",
+                            navigation_url.replace("'", "\\'")
+                        );
+                        window.eval(&js).unwrap_or_else(|e| {
+                            eprintln!("❌ Failed to evaluate JS for deep link: {}", e);
+                        });
+                    }
+                });
+
+                println!("✅ Deep link handler registered");
+            }
+
             // iOS: Prevent keyboard from scrolling webview and creating extra space
             #[cfg(target_os = "ios")]
             {

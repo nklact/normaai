@@ -8,7 +8,51 @@ const isDesktop = window.__TAURI__;
 // Base URL for API calls
 const API_BASE_URL = 'https://norma-ai.fly.dev'; // Always use Fly.io backend
 
-// Initialize Supabase client
+// Custom storage adapter for Tauri (PKCE requires persistent storage)
+function createTauriStorage() {
+  let storePromise = null;
+
+  const getStore = async () => {
+    if (!storePromise) {
+      const { Store } = await import('@tauri-apps/plugin-store');
+      storePromise = Store.load('auth.json');
+    }
+    return storePromise;
+  };
+
+  return {
+    async getItem(key) {
+      try {
+        const store = await getStore();
+        const value = await store.get(key);
+        return value ?? null;
+      } catch (error) {
+        console.error('Error getting item from Tauri store:', error);
+        return null;
+      }
+    },
+    async setItem(key, value) {
+      try {
+        const store = await getStore();
+        await store.set(key, value);
+        await store.save();
+      } catch (error) {
+        console.error('Error setting item in Tauri store:', error);
+      }
+    },
+    async removeItem(key) {
+      try {
+        const store = await getStore();
+        await store.delete(key);
+        await store.save();
+      } catch (error) {
+        console.error('Error removing item from Tauri store:', error);
+      }
+    }
+  };
+}
+
+// Initialize Supabase client with PKCE flow for better mobile/desktop support
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -16,7 +60,9 @@ const supabase = createClient(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      flowType: 'pkce', // Use PKCE flow (more secure for mobile/desktop)
+      storage: isDesktop ? createTauriStorage() : undefined // Custom storage for Tauri
     }
   }
 );
@@ -164,7 +210,17 @@ class ApiService {
   }
 
   /**
-   * Sign in with Google
+   * Sign in with Google - Opens system browser for OAuth (PKCE flow)
+   * Works on: Web, Desktop (Windows/Mac/Linux), Mobile (iOS/Android)
+   *
+   * Flow:
+   * 1. Opens system browser (Safari/Chrome) with Google OAuth
+   * 2. User authenticates with Google
+   * 3. Google redirects to https://chat.normaai.rs/auth/callback?code=xxx
+   * 4. On mobile: Universal Links/App Links intercept and open app
+   *    On desktop: Web page triggers deep link normaai://
+   *    On web: Normal redirect
+   * 5. AuthCallback component exchanges code for session using PKCE
    */
   async signInWithGoogle() {
     const deviceFingerprint = await getDeviceFingerprint();
@@ -172,7 +228,8 @@ class ApiService {
     // Determine redirect URL based on platform
     let redirectUrl;
     if (window.__TAURI__) {
-      // For Tauri apps, use the deep link callback
+      // For Tauri apps (desktop & mobile), redirect to our domain
+      // which will be caught by deep links / universal links
       redirectUrl = 'https://chat.normaai.rs/auth/callback';
     } else {
       // For web, use current origin
@@ -183,7 +240,7 @@ class ApiService {
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
-        skipBrowserRedirect: window.__TAURI__, // Don't auto-redirect in Tauri, we'll open external browser
+        skipBrowserRedirect: false, // Let Supabase open system browser automatically
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -198,11 +255,9 @@ class ApiService {
       throw new Error(error.message || 'Google prijava nije uspela');
     }
 
-    // For Tauri apps, open OAuth URL in external browser
-    if (window.__TAURI__ && data.url) {
-      const { open } = await import('@tauri-apps/plugin-opener');
-      await open(data.url);
-    }
+    // Supabase will automatically open the system browser
+    // The OAuth URL will open in Safari (iOS), Chrome (Android), or default browser (Desktop)
+    // This avoids the 403 disallowed_useragent error from embedded webviews
 
     return data;
   }
