@@ -225,12 +225,16 @@ class ApiService {
    * 6. App handles callback and exchanges PKCE code for session
    */
   async signInWithGoogle() {
+    console.log('🚀 signInWithGoogle() called');
     const deviceFingerprint = await getDeviceFingerprint();
 
     // For all platforms: Always redirect to web domain
     // Google OAuth doesn't support custom URL schemes (normaai://)
     // For Tauri apps: The web page will trigger deep link to open the app
     const redirectUrl = 'https://chat.normaai.rs/auth/callback';
+
+    console.log('📍 Platform:', window.__TAURI__ ? 'Tauri' : 'Web');
+    console.log('📍 Redirect URL:', redirectUrl);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -248,17 +252,32 @@ class ApiService {
     });
 
     if (error) {
+      console.error('❌ Supabase signInWithOAuth error:', error);
       throw new Error(error.message || 'Google prijava nije uspela');
     }
 
+    console.log('✅ OAuth URL received:', data.url ? data.url.substring(0, 100) + '...' : 'NO URL');
+
     // For Tauri apps: Manually open OAuth URL in EXTERNAL browser
-    // This is required because skipBrowserRedirect: true prevents automatic opening
-    if (window.__TAURI__ && data.url) {
-      console.log('🌐 Opening external browser for OAuth:', data.url);
-      const { open } = await import('@tauri-apps/plugin-opener');
-      await open(data.url);
+    if (window.__TAURI__) {
+      if (data.url) {
+        console.log('🌐 Opening external browser for OAuth (Tauri)');
+        const { open } = await import('@tauri-apps/plugin-opener');
+        await open(data.url);
+      } else {
+        console.error('❌ No OAuth URL returned from Supabase!');
+        throw new Error('No OAuth URL received');
+      }
+    } else {
+      // For web: Manually open the OAuth URL since skipBrowserRedirect is true
+      if (data.url) {
+        console.log('🌐 Redirecting to OAuth URL (Web)');
+        window.location.href = data.url;
+      } else {
+        console.error('❌ No OAuth URL returned from Supabase!');
+        throw new Error('No OAuth URL received');
+      }
     }
-    // For web: Browser will automatically redirect (skipBrowserRedirect is false behavior)
 
     return data;
   }
