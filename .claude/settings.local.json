@@ -8,7 +8,8 @@
       "Bash(npm run tauri:*)",
       "Read(//c/Users/Nikola/Documents/**)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:v2.tauri.app)"
     ],
     "deny": [],
     "ask": []
