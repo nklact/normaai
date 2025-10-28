@@ -3,15 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getDeviceFingerprint } from '../utils/deviceFingerprint.js';
 
 // Detect if we're running in Tauri (desktop/mobile) or web environment
-// Check multiple indicators for Tauri presence (iOS might not set __TAURI__ immediately)
-const isDesktop = Boolean(
-  window.__TAURI__ ||
-  window.__TAURI_INTERNALS__ ||
-  navigator.userAgent.includes('Tauri') ||
-  // iOS/Android app detection
-  (window.webkit && window.webkit.messageHandlers) ||
-  (typeof Android !== 'undefined')
-);
+const isDesktop = window.__TAURI__;
 
 // Base URL for API calls
 const API_BASE_URL = 'https://norma-ai.fly.dev'; // Always use Fly.io backend
@@ -236,23 +228,16 @@ class ApiService {
     console.log('🚀 signInWithGoogle() called');
     const deviceFingerprint = await getDeviceFingerprint();
 
-    // Detect Tauri environment more reliably (especially for iOS)
-    const isTauriApp = Boolean(
-      window.__TAURI__ ||
-      window.__TAURI_INTERNALS__ ||
-      navigator.userAgent.includes('Tauri') ||
-      (window.webkit && window.webkit.messageHandlers)
-    );
+    // Detect if we're in Tauri app
+    const isTauriApp = Boolean(window.__TAURI__);
 
     // For all platforms: Always redirect to web domain
     // Google OAuth doesn't support custom URL schemes (normaai://)
     // For Tauri apps: The web page will trigger deep link to open the app
     const redirectUrl = 'https://chat.normaai.rs/auth/callback';
 
-    console.log('📍 Platform:', isTauriApp ? 'Tauri App (iOS/Desktop)' : 'Web Browser');
-    console.log('📍 User Agent:', navigator.userAgent);
+    console.log('📍 Platform:', isTauriApp ? 'Tauri App' : 'Web Browser');
     console.log('📍 window.__TAURI__:', Boolean(window.__TAURI__));
-    console.log('📍 window.webkit:', Boolean(window.webkit));
     console.log('📍 Redirect URL:', redirectUrl);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
