@@ -268,11 +268,24 @@ class ApiService {
       if (data.url) {
         console.log('🌐 Opening EXTERNAL browser for OAuth (Tauri)');
         try {
-          const { open } = await import('@tauri-apps/plugin-opener');
-          await open(data.url);
+          // Try using global Tauri API first (available with withGlobalTauri: true)
+          if (window.__TAURI__ && window.__TAURI__.opener) {
+            console.log('Using window.__TAURI__.opener');
+            await window.__TAURI__.opener.open(data.url);
+          } else {
+            // Fallback to dynamic import
+            console.log('Using dynamic import of opener');
+            const opener = await import('@tauri-apps/plugin-opener');
+            const openFn = opener.open || opener.default?.open;
+            if (!openFn) {
+              throw new Error('opener.open function not found');
+            }
+            await openFn(data.url);
+          }
           console.log('✅ External browser opened successfully');
         } catch (openError) {
           console.error('❌ Failed to open external browser:', openError);
+          console.error('Error details:', openError.message, openError.stack);
           throw new Error('Failed to open external browser for OAuth');
         }
       } else {
