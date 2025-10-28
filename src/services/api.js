@@ -2,8 +2,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { getDeviceFingerprint } from '../utils/deviceFingerprint.js';
 
-// Detect if we're running in Tauri (desktop/mobile) or web environment
-const isDesktop = window.__TAURI__;
+// Detect if we're running in Tauri DESKTOP (Windows/Mac/Linux) environment
+// Mobile (iOS/Android) apps should use HTTP like web browsers
+const isDesktop = window.__TAURI__ && !(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
 // Base URL for API calls
 const API_BASE_URL = 'https://norma-ai.fly.dev'; // Always use Fly.io backend
