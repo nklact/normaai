@@ -2159,7 +2159,7 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "norma-ai"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.3",
@@ -2170,6 +2170,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-auth",
  "tauri-plugin-deep-link",
  "tauri-plugin-opener",
  "tauri-plugin-process",
@@ -4042,6 +4043,17 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.8",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-auth"
+version = "0.1.0"
+source = "git+https://github.com/inkibra/tauri-plugins?branch=main#e6afc02dd0dbfbadf5c92f09e645d84092490f8e"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

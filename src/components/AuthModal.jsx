@@ -139,8 +139,19 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
     setIsLoading(true);
     setError('');
     try {
-      await apiService.signInWithGoogle();
-      // OAuth redirect will happen automatically
+      const result = await apiService.signInWithGoogle();
+
+      // For mobile (ASWebAuthenticationSession), authentication is complete
+      // and session is returned directly
+      if (result?.session) {
+        setSuccess('Uspešno ste se prijavili!');
+        setTimeout(() => {
+          onSuccess(result);
+          onClose();
+        }, 1000);
+      }
+      // For desktop/web, OAuth redirect will happen automatically
+      // and session will be handled by deep link or redirect callback
     } catch (err) {
       console.error('Google login error:', err);
       setError(err.message || 'Google prijava nije uspela');

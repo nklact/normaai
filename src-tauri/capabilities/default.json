@@ -14,6 +14,8 @@
     "updater:allow-download-and-install",
     "process:default",
     "process:allow-restart",
-    "deep-link:default"
+    "deep-link:default",
+    "auth:default",
+    "auth:allow-authenticate"
   ]
 }

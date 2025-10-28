@@ -214,38 +214,44 @@ class ApiService {
   }
 
   /**
-   * Sign in with Google - Opens EXTERNAL browser for OAuth (PKCE flow)
+   * Sign in with Google - Uses ASWebAuthenticationSession on iOS/Android (PKCE flow)
    * Works on: Web, Desktop (Windows/Mac/Linux), Mobile (iOS/Android)
    *
-   * Flow:
+   * iOS/Android Flow (ASWebAuthenticationSession):
    * 1. Get OAuth URL from Supabase with skipBrowserRedirect: true
-   * 2. Manually open EXTERNAL browser (not webview) using Tauri opener plugin
-   * 3. User authenticates with Google in external browser
-   * 4. Google redirects to callback URL
-   * 5. Deep link/Universal Link brings user back to app
-   * 6. App handles callback and exchanges PKCE code for session
+   * 2. Open in-app browser via ASWebAuthenticationSession (iOS) or Custom Tabs (Android)
+   * 3. User authenticates with Google in secure in-app browser
+   * 4. Google redirects to callback URL (normaai://auth/callback)
+   * 5. Browser automatically returns to app with callback URL
+   * 6. Extract code from callback and exchange for session
+   *
+   * Desktop Flow:
+   * 1-4. Same as above but uses system browser (Safari/Chrome/Edge)
+   * 5. Deep link brings user back to app
+   * 6. Extract code and exchange for session
+   *
+   * Web Flow:
+   * Standard OAuth redirect flow handled by Supabase
    */
   async signInWithGoogle() {
     console.log('🚀 signInWithGoogle() called');
     const deviceFingerprint = await getDeviceFingerprint();
 
-    // Detect if we're in Tauri app
+    // Detect platform
     const isTauriApp = Boolean(window.__TAURI__);
+    const isMobile = isTauriApp && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isDesktop = isTauriApp && !isMobile;
 
-    // For all platforms: Always redirect to web domain
-    // Google OAuth doesn't support custom URL schemes (normaai://)
-    // For Tauri apps: The web page will trigger deep link to open the app
-    const redirectUrl = 'https://chat.normaai.rs/auth/callback';
+    console.log('📍 Platform:', isTauriApp ? (isMobile ? 'Tauri Mobile' : 'Tauri Desktop') : 'Web Browser');
 
-    console.log('📍 Platform:', isTauriApp ? 'Tauri App' : 'Web Browser');
-    console.log('📍 window.__TAURI__:', Boolean(window.__TAURI__));
-    console.log('📍 Redirect URL:', redirectUrl);
-
+    // Get OAuth URL from Supabase
+    // Always use HTTPS redirect URL because Google OAuth doesn't support custom URL schemes
+    // For mobile, we'll use Universal Links (https://chat.normaai.rs) configured in tauri.conf.json
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: redirectUrl,
-        skipBrowserRedirect: isTauriApp, // Skip auto-redirect for Tauri, we'll open external browser
+        redirectTo: 'https://chat.normaai.rs/auth/callback', // HTTPS for all platforms
+        skipBrowserRedirect: isTauriApp, // We'll handle browser opening manually for Tauri
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -263,39 +269,72 @@ class ApiService {
 
     console.log('✅ OAuth URL received:', data.url ? data.url.substring(0, 100) + '...' : 'NO URL');
 
-    // For Tauri apps: Manually open OAuth URL in EXTERNAL browser (Safari/Chrome)
-    if (isTauriApp) {
-      if (data.url) {
-        console.log('🌐 Opening EXTERNAL browser for OAuth (Tauri)');
-        try {
-          // Try using global Tauri API first (available with withGlobalTauri: true)
-          if (window.__TAURI__ && window.__TAURI__.opener) {
-            console.log('Using window.__TAURI__.opener');
-            await window.__TAURI__.opener.openUrl(data.url);
-          } else {
-            // Fallback to dynamic import
-            console.log('Using dynamic import of opener');
-            const { openUrl } = await import('@tauri-apps/plugin-opener');
-            if (!openUrl) {
-              throw new Error('openUrl function not found');
-            }
-            await openUrl(data.url);
-          }
-          console.log('✅ External browser opened successfully');
-        } catch (openError) {
-          console.error('❌ Failed to open external browser:', openError);
-          console.error('Error details:', openError.message, openError.stack);
-          throw new Error('Failed to open external browser for OAuth');
-        }
-      } else {
-        console.error('❌ No OAuth URL returned from Supabase!');
-        throw new Error('No OAuth URL received');
-      }
-    } else {
-      // For web: Supabase handles redirect automatically when skipBrowserRedirect is false
-      console.log('🌐 Web browser - Supabase will handle redirect');
+    if (!data.url) {
+      console.error('❌ No OAuth URL returned from Supabase!');
+      throw new Error('No OAuth URL received');
     }
 
+    // Mobile: Use ASWebAuthenticationSession (in-app browser)
+    // Note: We use 'https' as callbackScheme because Google OAuth doesn't support custom URL schemes
+    // The plugin will use ASWebAuthenticationSession with Universal Links (https://chat.normaai.rs)
+    if (isMobile) {
+      console.log('📱 Opening ASWebAuthenticationSession (in-app browser)');
+      try {
+        const { authenticate } = await import('@inkibra/tauri-plugin-auth');
+
+        // Use 'https' as the scheme since Google requires HTTPS redirects
+        // The actual callback will be: https://chat.normaai.rs/auth/callback?code=xxx
+        const result = await authenticate({
+          authUrl: data.url,
+          callbackScheme: 'https' // Use https instead of custom scheme
+        });
+
+        console.log('✅ Authentication completed, callback received:', result.callbackUrl.substring(0, 100) + '...');
+
+        // Extract code from callback URL
+        const callbackUrl = new URL(result.callbackUrl);
+        const code = callbackUrl.searchParams.get('code');
+
+        if (!code) {
+          throw new Error('No authorization code in callback URL');
+        }
+
+        console.log('🔐 Exchanging authorization code for session...');
+
+        // Exchange code for session using Supabase PKCE
+        const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (sessionError) {
+          console.error('❌ Failed to exchange code for session:', sessionError);
+          throw new Error(sessionError.message || 'Failed to complete authentication');
+        }
+
+        console.log('✅ Session obtained successfully');
+        return sessionData;
+
+      } catch (authError) {
+        console.error('❌ ASWebAuthenticationSession error:', authError);
+        throw new Error(authError.message || 'Authentication failed');
+      }
+    }
+
+    // Desktop: Use external browser (Safari/Chrome/Edge) with deep link
+    if (isDesktop) {
+      console.log('🖥️ Opening external browser for OAuth (Desktop)');
+      try {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(data.url);
+        console.log('✅ External browser opened successfully');
+        // Desktop will handle the callback via deep link in App.jsx
+        return data;
+      } catch (openError) {
+        console.error('❌ Failed to open external browser:', openError);
+        throw new Error('Failed to open browser for OAuth');
+      }
+    }
+
+    // Web: Standard OAuth redirect flow
+    console.log('🌐 Web browser - Supabase will handle redirect');
     return data;
   }
 
