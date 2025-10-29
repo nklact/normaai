@@ -295,6 +295,20 @@ class ApiService {
           throw new Error('Google OAuth Client ID is not configured. Please check your environment variables.');
         }
 
+        // Additional iOS validation
+        if (isIOS) {
+          console.log('🔍 DEBUG: Validating iOS Client ID format...');
+          if (typeof clientId !== 'string' || clientId === 'undefined' || clientId === '') {
+            console.error('❌ DEBUG: iOS Client ID is invalid:', clientId);
+            throw new Error('iOS Google Client ID is not properly configured. Please ensure VITE_GOOGLE_IOS_CLIENT_ID is set correctly in your build environment.');
+          }
+          if (!clientId.includes('.apps.googleusercontent.com')) {
+            console.warn('⚠️ DEBUG: iOS Client ID might be incorrect format. Expected format: XXXXX.apps.googleusercontent.com');
+            console.warn('⚠️ DEBUG: Current value:', clientId);
+          }
+          console.log('✅ DEBUG: iOS Client ID format validation passed');
+        }
+
         console.log('🔍 DEBUG: Step 4 - Preparing signIn parameters...');
         const signInParams = {
           clientId: clientId,
@@ -304,9 +318,22 @@ class ApiService {
         console.log('🔍 DEBUG: signIn params:', JSON.stringify(signInParams, null, 2));
 
         console.log('🔐 DEBUG: Step 5 - Calling Google Sign In...');
-        const response = await signIn(signInParams);
+        console.log('🔐 DEBUG: About to call native signIn with clientId:', clientId.substring(0, 20) + '...');
 
-        console.log('✅ DEBUG: Step 6 - Google authentication successful');
+        let response;
+        try {
+          response = await signIn(signInParams);
+          console.log('✅ DEBUG: Step 6 - Google authentication successful');
+        } catch (signInError) {
+          console.error('❌ DEBUG: signIn() call failed');
+          console.error('❌ DEBUG: This might indicate:');
+          console.error('   - Wrong Client ID type (Web instead of iOS)');
+          console.error('   - Missing URL scheme in Info.plist');
+          console.error('   - Client ID not registered in Google Cloud Console');
+          console.error('❌ DEBUG: Error:', signInError);
+          throw new Error(`Google Sign In failed: ${signInError?.message || 'Unknown native error'}`);
+        }
+
         console.log('🔍 DEBUG: Response keys:', Object.keys(response || {}));
         console.log('🔍 DEBUG: Has idToken:', !!response?.idToken);
 

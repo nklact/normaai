@@ -57,8 +57,20 @@ jobs:
           echo "iOS project initialized"
 
       - name: Configure Google OAuth URL Scheme in Info.plist
+        env:
+          VITE_GOOGLE_IOS_CLIENT_ID: ${{ secrets.VITE_GOOGLE_IOS_CLIENT_ID }}
         run: |
           cd src-tauri/gen/apple
+
+          # Add GIDClientID (required by Google Sign-In iOS SDK)
+          /usr/libexec/PlistBuddy -c "Add :GIDClientID string $VITE_GOOGLE_IOS_CLIENT_ID" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :GIDClientID $VITE_GOOGLE_IOS_CLIENT_ID" norma-ai_iOS/Info.plist 2>/dev/null || true
+
+          # Add LSApplicationQueriesSchemes for Google Sign-In (allows checking for Google apps)
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string googlechromes" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:1 string googlechrome" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:2 string com.google.gpages" norma-ai_iOS/Info.plist 2>/dev/null || true
 
           # Add Google OAuth URL scheme to Info.plist
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" norma-ai_iOS/Info.plist 2>/dev/null || true
@@ -68,10 +80,13 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" norma-ai_iOS/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string com.googleusercontent.apps.661564927057-spmsn2fh72qjc4ac1d3rkuqepfcvolkv" norma-ai_iOS/Info.plist 2>/dev/null || true
 
-          echo "✅ Google OAuth URL scheme configured in Info.plist"
+          echo "✅ Google OAuth configuration added to Info.plist"
 
           # Verify the configuration
           echo "Verifying Info.plist configuration:"
+          echo "GIDClientID:"
+          /usr/libexec/PlistBuddy -c "Print :GIDClientID" norma-ai_iOS/Info.plist || echo "⚠️ Could not verify GIDClientID"
+          echo "CFBundleURLTypes:"
           /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" norma-ai_iOS/Info.plist || echo "⚠️ Could not verify URL types"
 
       - name: Configure Xcode project for manual code signing

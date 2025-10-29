@@ -23,6 +23,8 @@
     "store:allow-save",
     "google-auth:default",
     "google-auth:allow-sign-in",
-    "google-auth:allow-sign-out"
+    "google-auth:allow-sign-out",
+    "machine-uid:default",
+    "machine-uid:allow-get-machine-uid"
   ]
 }
