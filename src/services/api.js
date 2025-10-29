@@ -260,21 +260,29 @@ class ApiService {
     // Tauri apps (iOS, Android, Desktop): Use tauri-plugin-google-auth
     if (isTauriApp) {
       console.log('📱 Using tauri-plugin-google-auth');
-      try {
-        const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api');
-        const { GOOGLE_OAUTH_CONFIG } = await import('../config/google-oauth.js');
+      console.log('🔍 DEBUG: Platform detection - isIOS:', isIOS, 'isAndroid:', isAndroid, 'isDesktop:', isDesktop);
 
-        console.log('🔍 DEBUG: GOOGLE_OAUTH_CONFIG loaded:', JSON.stringify(GOOGLE_OAUTH_CONFIG, null, 2));
+      try {
+        console.log('🔍 DEBUG: Step 1 - Importing tauri-plugin-google-auth-api...');
+        const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api');
+        console.log('🔍 DEBUG: Step 1 - signIn function imported:', typeof signIn);
+
+        console.log('🔍 DEBUG: Step 2 - Importing google-oauth config...');
+        const { GOOGLE_OAUTH_CONFIG } = await import('../config/google-oauth.js');
+        console.log('🔍 DEBUG: Step 2 - GOOGLE_OAUTH_CONFIG loaded:', JSON.stringify(GOOGLE_OAUTH_CONFIG, null, 2));
 
         // Select the appropriate Client ID based on platform
         let clientId, clientSecret;
 
+        console.log('🔍 DEBUG: Step 3 - Selecting platform-specific config...');
         if (isIOS) {
           clientId = GOOGLE_OAUTH_CONFIG.ios.clientId;
           console.log('🔍 DEBUG: iOS Client ID:', clientId);
+          console.log('🔍 DEBUG: iOS Client ID type:', typeof clientId);
         } else if (isAndroid) {
           clientId = GOOGLE_OAUTH_CONFIG.android.clientId;
           console.log('🔍 DEBUG: Android Client ID:', clientId);
+          console.log('🔍 DEBUG: Android Client ID type:', typeof clientId);
         } else if (isDesktop) {
           clientId = GOOGLE_OAUTH_CONFIG.desktop.clientId;
           clientSecret = GOOGLE_OAUTH_CONFIG.desktop.clientSecret;
@@ -283,18 +291,24 @@ class ApiService {
         }
 
         if (!clientId) {
+          console.error('❌ DEBUG: clientId is missing!');
           throw new Error('Google OAuth Client ID is not configured. Please check your environment variables.');
         }
 
-        console.log('🔐 Calling Google Sign In with clientId...');
-
-        const response = await signIn({
+        console.log('🔍 DEBUG: Step 4 - Preparing signIn parameters...');
+        const signInParams = {
           clientId: clientId,
-          clientSecret: clientSecret, // Required for desktop, optional for mobile
+          clientSecret: clientSecret,
           scopes: ['openid', 'email', 'profile'],
-        });
+        };
+        console.log('🔍 DEBUG: signIn params:', JSON.stringify(signInParams, null, 2));
 
-        console.log('✅ Google authentication successful, got ID token');
+        console.log('🔐 DEBUG: Step 5 - Calling Google Sign In...');
+        const response = await signIn(signInParams);
+
+        console.log('✅ DEBUG: Step 6 - Google authentication successful');
+        console.log('🔍 DEBUG: Response keys:', Object.keys(response || {}));
+        console.log('🔍 DEBUG: Has idToken:', !!response?.idToken);
 
         // Exchange Google ID token with Supabase
         console.log('🔄 Exchanging Google ID token with Supabase...');
@@ -323,7 +337,25 @@ class ApiService {
         return { session: data.session, user: data.user };
 
       } catch (authError) {
-        console.error('❌ Google authentication error:', authError);
+        console.error('❌ DEBUG: Tauri Google Sign In failed at some step');
+        console.error('❌ DEBUG: Error name:', authError?.name);
+        console.error('❌ DEBUG: Error message:', authError?.message);
+        console.error('❌ DEBUG: Error stack:', authError?.stack);
+        console.error('❌ DEBUG: Full error object:', JSON.stringify(authError, Object.getOwnPropertyNames(authError), 2));
+
+        // Try to identify which step failed
+        if (authError?.message?.includes('not configured')) {
+          console.error('❌ DEBUG: Failed at Step 3 - Client ID validation');
+        } else if (authError?.message?.includes('import')) {
+          console.error('❌ DEBUG: Failed at Step 1 or 2 - Module import');
+        } else if (authError?.message?.includes('signIn')) {
+          console.error('❌ DEBUG: Failed at Step 5 - Calling signIn function');
+        } else if (authError?.message?.includes('Supabase')) {
+          console.error('❌ DEBUG: Failed at Step 7 - Supabase token exchange');
+        } else {
+          console.error('❌ DEBUG: Failed at unknown step - check error details above');
+        }
+
         throw new Error(authError.message || 'Google prijava nije uspela');
       }
     }
