@@ -136,10 +136,13 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
 
   // Google login handler
   const handleGoogleLogin = async () => {
+    console.log('🚀 handleGoogleLogin() called - button was clicked');
     setIsLoading(true);
     setError('');
     try {
+      console.log('🚀 About to call apiService.signInWithGoogle()');
       const result = await apiService.signInWithGoogle();
+      console.log('🚀 apiService.signInWithGoogle() returned:', result);
 
       // For Tauri apps (iOS, Android, Desktop), authentication is complete
       // and session is returned directly from tauri-plugin-google-auth

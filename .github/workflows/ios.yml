@@ -86,6 +86,22 @@ jobs:
           echo "Verifying Info.plist configuration:"
           echo "GIDClientID:"
           /usr/libexec/PlistBuddy -c "Print :GIDClientID" norma-ai_iOS/Info.plist || echo "⚠️ Could not verify GIDClientID"
+
+          # Additional verification - check if GIDClientID is set and valid
+          GID_VALUE=$(/usr/libexec/PlistBuddy -c "Print :GIDClientID" norma-ai_iOS/Info.plist 2>/dev/null || echo "")
+          if [ -z "$GID_VALUE" ]; then
+            echo "❌ ERROR: GIDClientID is EMPTY or NOT SET!"
+            exit 1
+          else
+            echo "✅ GIDClientID is set (length: ${#GID_VALUE} characters)"
+            echo "✅ GIDClientID format check: starts with '${GID_VALUE:0:15}...' ends with '...${GID_VALUE: -20}'"
+            if [[ $GID_VALUE == *".apps.googleusercontent.com"* ]]; then
+              echo "✅ GIDClientID contains '.apps.googleusercontent.com'"
+            else
+              echo "❌ WARNING: GIDClientID does NOT contain '.apps.googleusercontent.com'"
+            fi
+          fi
+
           echo "CFBundleURLTypes:"
           /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" norma-ai_iOS/Info.plist || echo "⚠️ Could not verify URL types"
 

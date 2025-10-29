@@ -263,8 +263,11 @@ class ApiService {
       console.log('🔍 DEBUG: Platform detection - isIOS:', isIOS, 'isAndroid:', isAndroid, 'isDesktop:', isDesktop);
 
       try {
-        console.log('🔍 DEBUG: Step 1 - Importing tauri-plugin-google-auth-api...');
+        console.log('🔍 DEBUG: Step 1 - About to import tauri-plugin-google-auth-api...');
+        console.log('🔍 DEBUG: window.__TAURI__ exists:', !!window.__TAURI__);
+
         const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api');
+        console.log('🔍 DEBUG: Step 1 COMPLETE - signIn function imported successfully');
         console.log('🔍 DEBUG: Step 1 - signIn function imported:', typeof signIn);
 
         console.log('🔍 DEBUG: Step 2 - Importing google-oauth config...');
