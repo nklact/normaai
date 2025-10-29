@@ -56,6 +56,76 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Add SimpleGoogleSignIn Swift Package dependency
+        run: |
+          cd src-tauri/gen/apple
+
+          echo "Adding SimpleGoogleSignIn Swift Package to Xcode project..."
+
+          # Use Ruby xcodeproj gem to add Swift Package dependency
+          ruby << 'RUBY'
+          require 'xcodeproj'
+
+          project_path = 'norma-ai.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+
+          # SimpleGoogleSignIn package details
+          package_url = 'https://github.com/Choochmeque/SimpleGoogleSignIn.git'
+          package_product_name = 'SimpleGoogleSignIn'
+
+          # Check if package already exists
+          existing_package = project.root_object.package_references.find do |pkg|
+            pkg.repositoryURL == package_url
+          end
+
+          unless existing_package
+            puts "📦 Adding SimpleGoogleSignIn package dependency..."
+
+            # Create package reference
+            package_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+            package_ref.repositoryURL = package_url
+            package_ref.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '1.0.2' }
+
+            # Add to project's package references
+            project.root_object.package_references << package_ref
+
+            # Add package product to the main app target
+            main_target = project.targets.find { |t| t.name.include?('norma-ai') && t.product_type == 'com.apple.product-type.application' }
+
+            if main_target
+              puts "✅ Found main app target: #{main_target.name}"
+
+              # Create package product dependency
+              package_product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+              package_product.package = package_ref
+              package_product.product_name = package_product_name
+
+              # Add to target's package dependencies
+              main_target.package_product_dependencies << package_product
+
+              puts "✅ SimpleGoogleSignIn added to #{main_target.name}"
+            else
+              puts "⚠️ Warning: Could not find main app target"
+            end
+
+            project.save
+            puts "✅ SimpleGoogleSignIn package dependency added successfully"
+          else
+            puts "ℹ️ SimpleGoogleSignIn package already exists in project"
+          end
+          RUBY
+
+          echo "✅ Swift Package configuration complete"
+
+          # Verify the package was added
+          echo ""
+          echo "Verifying Swift Package dependencies in project:"
+          if grep -q "SimpleGoogleSignIn" norma-ai.xcodeproj/project.pbxproj; then
+            echo "✅ SimpleGoogleSignIn found in project.pbxproj"
+          else
+            echo "⚠️ WARNING: SimpleGoogleSignIn NOT found in project.pbxproj"
+          fi
+
       - name: Configure Google OAuth URL Scheme in Info.plist
         env:
           VITE_GOOGLE_IOS_CLIENT_ID: ${{ secrets.VITE_GOOGLE_IOS_CLIENT_ID }}

@@ -10,7 +10,8 @@
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:supabase.com)",
       "WebFetch(domain:v2.tauri.app)",
-      "Read(//c/Users/Nikola/Downloads/**)"
+      "Read(//c/Users/Nikola/Downloads/**)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []
