@@ -264,19 +264,29 @@ class ApiService {
         const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api');
         const { GOOGLE_OAUTH_CONFIG } = await import('../config/google-oauth.js');
 
+        console.log('🔍 DEBUG: GOOGLE_OAUTH_CONFIG loaded:', JSON.stringify(GOOGLE_OAUTH_CONFIG, null, 2));
+
         // Select the appropriate Client ID based on platform
         let clientId, clientSecret;
 
         if (isIOS) {
           clientId = GOOGLE_OAUTH_CONFIG.ios.clientId;
+          console.log('🔍 DEBUG: iOS Client ID:', clientId);
         } else if (isAndroid) {
           clientId = GOOGLE_OAUTH_CONFIG.android.clientId;
+          console.log('🔍 DEBUG: Android Client ID:', clientId);
         } else if (isDesktop) {
           clientId = GOOGLE_OAUTH_CONFIG.desktop.clientId;
           clientSecret = GOOGLE_OAUTH_CONFIG.desktop.clientSecret;
+          console.log('🔍 DEBUG: Desktop Client ID:', clientId);
+          console.log('🔍 DEBUG: Desktop Client Secret exists:', !!clientSecret);
         }
 
-        console.log('🔐 Calling Google Sign In...');
+        if (!clientId) {
+          throw new Error('Google OAuth Client ID is not configured. Please check your environment variables.');
+        }
+
+        console.log('🔐 Calling Google Sign In with clientId...');
 
         const response = await signIn({
           clientId: clientId,
