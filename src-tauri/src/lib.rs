@@ -9,248 +9,34 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-// Windows: Get machine GUID
-#[cfg(target_os = "windows")]
-fn get_system_machine_id() -> Result<String, String> {
-    use std::process::Command;
-
-    // Try to get Windows machine GUID using wmic
-    let output = Command::new("wmic")
-        .args(&["csproduct", "get", "uuid", "/format:value"])
-        .output()
-        .map_err(|e| format!("Failed to run wmic: {}", e))?;
-
-    if output.status.success() {
-        let result = String::from_utf8_lossy(&output.stdout);
-        for line in result.lines() {
-            if line.starts_with("UUID=") {
-                let uuid = line[5..].trim();
-                if !uuid.is_empty() && uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" {
-                    return Ok(uuid.to_string());
-                }
-            }
-        }
-    }
-
-    // Fallback: Try registry
-    get_system_hardware_uuid()
-}
-
-// macOS: Get hardware UUID
-#[cfg(target_os = "macos")]
-fn get_system_machine_id() -> Result<String, String> {
-    use std::process::Command;
-
-    let output = Command::new("system_profiler")
-        .args(&["SPHardwareDataType", "-json"])
-        .output()
-        .map_err(|e| format!("Failed to run system_profiler: {}", e))?;
-
-    if output.status.success() {
-        let result = String::from_utf8_lossy(&output.stdout);
-        // Parse JSON to get hardware UUID
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&result) {
-            if let Some(hardware) = json["SPHardwareDataType"]
-                .as_array()
-                .and_then(|arr| arr.first())
-            {
-                if let Some(uuid) = hardware["platform_UUID"].as_str() {
-                    return Ok(uuid.to_string());
-                }
-            }
-        }
-    }
-
-    // Fallback
-    get_system_hardware_uuid()
-}
-
-// Linux: Get machine ID
-#[cfg(target_os = "linux")]
-fn get_system_machine_id() -> Result<String, String> {
-    use std::fs;
-
-    // Try /etc/machine-id first
-    if let Ok(machine_id) = fs::read_to_string("/etc/machine-id") {
-        let trimmed = machine_id.trim();
-        if !trimmed.is_empty() {
-            return Ok(trimmed.to_string());
-        }
-    }
-
-    // Fallback to /var/lib/dbus/machine-id
-    if let Ok(machine_id) = fs::read_to_string("/var/lib/dbus/machine-id") {
-        let trimmed = machine_id.trim();
-        if !trimmed.is_empty() {
-            return Ok(trimmed.to_string());
-        }
-    }
-
-    get_system_hardware_uuid()
-}
-
-// iOS: Not supported (mobile uses different device ID approach)
-#[cfg(target_os = "ios")]
-#[allow(dead_code)]
-fn get_system_machine_id() -> Result<String, String> {
-    Err("Device ID not supported on iOS - use mobile device APIs instead".to_string())
-}
-
-// Fallback hardware UUID method
-#[allow(dead_code)]
-fn get_system_hardware_uuid() -> Result<String, String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-
-        // Try PowerShell method for Windows
-        let output = Command::new("powershell")
-            .args(&[
-                "-Command",
-                "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID",
-            ])
-            .output()
-            .map_err(|e| format!("Failed to run PowerShell: {}", e))?;
-
-        if output.status.success() {
-            let uuid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !uuid.is_empty() && uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" {
-                return Ok(uuid);
-            }
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-
-        let output = Command::new("ioreg")
-            .args(&["-rd1", "-c", "IOPlatformExpertDevice"])
-            .output()
-            .map_err(|e| format!("Failed to run ioreg: {}", e))?;
-
-        if output.status.success() {
-            let result = String::from_utf8_lossy(&output.stdout);
-            for line in result.lines() {
-                if line.contains("IOPlatformUUID") {
-                    if let Some(start) = line
-                        .find('"')
-                        .and_then(|pos| line[pos + 1..].find('"').map(|p| pos + p + 1))
-                    {
-                        if let Some(end) = line[start + 1..].find('"').map(|p| start + p + 1) {
-                            return Ok(line[start + 1..end].to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use std::fs;
-        use std::process::Command;
-
-        // Try DMI product UUID
-        if let Ok(uuid) = fs::read_to_string("/sys/class/dmi/id/product_uuid") {
-            let trimmed = uuid.trim();
-            if !trimmed.is_empty() {
-                return Ok(trimmed.to_string());
-            }
-        }
-
-        // Try dmidecode as fallback
-        if let Ok(output) = Command::new("dmidecode")
-            .args(&["-s", "system-uuid"])
-            .output()
-        {
-            if output.status.success() {
-                let uuid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !uuid.is_empty() {
-                    return Ok(uuid);
-                }
-            }
-        }
-    }
-
-    Err("Could not determine system hardware UUID".to_string())
-}
-
-// These Tauri commands are only for desktop builds (Windows/macOS/Linux desktop)
-// Mobile builds (Android/iOS) use native device APIs instead
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tauri::command]
-fn get_machine_id() -> Result<String, String> {
-    get_system_machine_id()
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tauri::command]
-fn get_system_uuid() -> Result<String, String> {
-    get_system_hardware_uuid()
-}
+// Note: Device ID retrieval is now handled by tauri-plugin-machine-uid
+// The plugin provides getMachineUid() command that works across all platforms:
+// - Windows: WMI system UUID
+// - macOS: IOKit system UUID
+// - Linux: D-Bus machine ID
+// - iOS: UIDevice's identifierForVendor
+// - Android: Settings.Secure.ANDROID_ID
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_google_auth::init())
+        .plugin(tauri_plugin_machine_uid::init());
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_auth::init());
+        .plugin(tauri_plugin_google_auth::init())
+        .plugin(tauri_plugin_machine_uid::init());
 
     builder
         .setup(|app| {
-            // Register deep link handler for OAuth callback
-            // Handles: normaai://auth/callback (desktop) and https://chat.normaai.rs/auth/callback (mobile)
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux", target_os = "ios", target_os = "android"))]
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-
-                // Register all deep links from config
-                app.deep_link().register_all().unwrap_or_else(|e| {
-                    eprintln!("❌ Failed to register deep links: {}", e);
-                });
-
-                let app_handle = app.handle().clone();
-                app.deep_link().on_open_url(move |event| {
-                    let url = event.urls().first().unwrap().to_string();
-                    println!("🔗 Deep link received: {}", url);
-
-                    // Forward the URL to the webview so it can handle the OAuth callback
-                    // This navigates the webview to the callback URL which triggers AuthCallback component
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        // Convert deep link to HTTPS URL for consistency
-                        // normaai://auth/callback?code=xxx -> https://chat.normaai.rs/auth/callback?code=xxx
-                        let navigation_url = if url.starts_with("normaai://") {
-                            url.replace("normaai://", "https://chat.normaai.rs/")
-                        } else {
-                            url.clone()
-                        };
-
-                        println!("🔄 Navigating webview to: {}", navigation_url);
-
-                        let js = format!(
-                            "window.location.href = '{}';",
-                            navigation_url.replace("'", "\\'")
-                        );
-                        window.eval(&js).unwrap_or_else(|e| {
-                            eprintln!("❌ Failed to evaluate JS for deep link: {}", e);
-                        });
-                    }
-                });
-
-                println!("✅ Deep link handler registered");
-            }
-
             // iOS: Prevent keyboard from scrolling webview and creating extra space
             #[cfg(target_os = "ios")]
             {
@@ -277,14 +63,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler({
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            {
-                tauri::generate_handler![greet, get_machine_id, get_system_uuid]
-            }
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            {
-                tauri::generate_handler![greet]
-            }
+            tauri::generate_handler![greet]
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

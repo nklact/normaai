@@ -108,109 +108,32 @@ function App() {
     };
   }, []);
 
-  // Handle deep link OAuth callback (for desktop/mobile)
-  // Supports PKCE flow (code in query params) - recommended for mobile/desktop
-  const handleDeepLink = async (url) => {
-    try {
-      console.log('🔗 Processing deep link URL:', url);
-
-      const urlObj = new URL(url);
-
-      // PKCE Flow: Check for authorization code in query parameters
-      const code = new URLSearchParams(urlObj.search).get('code');
-
-      if (code) {
-        console.log('🔐 PKCE authorization code detected, exchanging for session...');
-
-        // Exchange PKCE code for session
-        // Supabase stores the code_verifier in storage and automatically uses it
-        const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
-
-        if (error) {
-          console.error('❌ Error exchanging PKCE code for session:', error);
-          setErrorMessage(`OAuth greška: ${error.message}`);
-          setErrorDialogOpen(true);
-          return;
-        }
-
-        console.log('✅ PKCE session obtained successfully');
-
-        // Refresh the auth state
-        const status = await apiService.getUserStatus();
-        setUserStatus(status);
-        const authenticated = await apiService.isAuthenticated();
-        setIsAuthenticated(authenticated);
-
-        console.log('✅ Authentication successful via PKCE deep link');
-
-        // Close auth modal if open
-        setAuthModalOpen(false);
-      } else {
-        console.log('⚠️ No authorization code found in deep link');
-      }
-    } catch (error) {
-      console.error('❌ Error processing deep link:', error);
-      setErrorMessage(`Greška pri obradi OAuth povratnog poziva: ${error.message}`);
-      setErrorDialogOpen(true);
-    }
-  };
-
   // Initialize authentication state
   const initializeAuth = async () => {
     try {
-      // Check for OAuth callback code in URL (PKCE flow)
-      // This handles both web OAuth and fallback from callback.html when deep link fails
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+      // Check for OAuth callback code in URL (Web platform only)
+      // For Tauri apps, authentication is handled by tauri-plugin-google-auth
+      if (!window.__TAURI__) {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
 
-      if (code) {
-        console.log('🔐 OAuth callback detected with PKCE code, exchanging for session...');
+        if (code) {
+          console.log('🔐 Web OAuth callback detected, exchanging code for session...');
 
-        // Exchange PKCE code for session
-        const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
+          // Exchange PKCE code for session
+          const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
 
-        if (error) {
-          console.error('❌ Error exchanging code for session:', error);
-          setErrorMessage(`OAuth greška: ${error.message}`);
-          setErrorDialogOpen(true);
-        } else {
-          console.log('✅ OAuth session obtained successfully');
-          setAuthModalOpen(false);
-        }
+          if (error) {
+            console.error('❌ Error exchanging code for session:', error);
+            setErrorMessage(`OAuth greška: ${error.message}`);
+            setErrorDialogOpen(true);
+          } else {
+            console.log('✅ OAuth session obtained successfully');
+            setAuthModalOpen(false);
+          }
 
-        // Clear the code from URL
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-
-      // For desktop/mobile apps: Listen for deep links
-      if (window.__TAURI__) {
-        try {
-          // Add timeout to prevent hanging on iOS if deep link plugin fails
-          await Promise.race([
-            (async () => {
-              const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
-
-              // Listen for deep link events (when app is already open)
-              await onOpenUrl((urls) => {
-                console.log('🔗 Deep link received:', urls);
-                handleDeepLink(urls[0]);
-              });
-
-              // Check if app was opened via deep link
-              const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
-              const startUrls = await getCurrent();
-              if (startUrls && startUrls.length > 0) {
-                console.log('🔗 App opened via deep link:', startUrls);
-                handleDeepLink(startUrls[0]);
-              }
-            })(),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Deep link initialization timeout')), 5000)
-            )
-          ]);
-        } catch (deepLinkError) {
-          // If deep link fails, log but continue - app should work without deep links
-          console.warn('⚠️ Deep link initialization failed, continuing without deep links:', deepLinkError);
+          // Clear the code from URL
+          window.history.replaceState(null, '', window.location.pathname);
         }
       }
 

@@ -9,7 +9,8 @@
       "Read(//c/Users/Nikola/Documents/**)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:supabase.com)",
-      "WebFetch(domain:v2.tauri.app)"
+      "WebFetch(domain:v2.tauri.app)",
+      "Read(//c/Users/Nikola/Downloads/**)"
     ],
     "deny": [],
     "ask": []

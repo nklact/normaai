@@ -6,9 +6,11 @@ import * as persistentStorage from "./persistentStorage.js";
  * @returns {string} Platform identifier
  */
 function detectPlatform() {
-  // Check for Tauri desktop app
+  // Check for Tauri app (desktop or mobile)
   if (typeof window !== "undefined" && window.__TAURI__) {
-    return "desktop";
+    // Detect if mobile device by user agent
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    return isMobile ? "mobile-app" : "desktop";
   }
 
   // All browsers (mobile and desktop) use the same browser fingerprinting
@@ -17,74 +19,62 @@ function detectPlatform() {
 
 /**
  * Generate device fingerprint for desktop Tauri app
- * Uses hardware UUID from Tauri APIs
+ * Uses tauri-plugin-machine-uid for hardware UUID
  */
 async function generateDesktopFingerprint() {
   try {
-    // Check if we're in a Tauri context and not a web build
-    if (
-      typeof window !== "undefined" &&
-      window.__TAURI__ &&
-      typeof __TAURI_BUILD__ !== "undefined" &&
-      __TAURI_BUILD__
-    ) {
-      // Dynamic import only in Tauri builds
-      const { invoke } = await import("@tauri-apps/api/core");
+    // Check if we're in a Tauri context
+    if (typeof window !== "undefined" && window.__TAURI__) {
+      // Dynamic import of the machine-uid plugin
+      const { commands } = await import("@skipperndt/plugin-machine-uid");
 
-      // Try to get Windows machine GUID or macOS hardware UUID
-      const machineId = await invoke("get_machine_id").catch(() => {
-        // Fallback to other system identifiers if machine ID fails
-        return invoke("get_system_uuid").catch(() => "desktop-fallback");
-      });
+      // Get machine UID using the plugin
+      const result = await commands.getMachineUid();
 
-      return sha256(machineId);
+      if (result.status === "ok" && result.data.id) {
+        return sha256(result.data.id);
+      } else {
+        console.info("Machine UID plugin returned no ID (normal in dev mode), using browser fallback");
+        return await generateBrowserFingerprint();
+      }
     } else {
       // Not in Tauri context, use browser fingerprinting
       return await generateBrowserFingerprint();
     }
   } catch (error) {
-    console.warn("Failed to get desktop hardware ID, using fallback");
-    // Fallback to browser-based fingerprinting for desktop
+    console.warn("Failed to get machine UID, using fallback:", error);
+    // Fallback to browser-based fingerprinting
     return await generateBrowserFingerprint();
   }
 }
 
 /**
- * Generate device fingerprint for mobile apps
- * Uses platform-specific identifiers (Android ID / iOS IDFV)
+ * Generate device fingerprint for mobile Tauri apps
+ * Uses tauri-plugin-machine-uid for platform-specific identifiers
+ * iOS: identifierForVendor, Android: Settings.Secure.ANDROID_ID
  */
 async function generateMobileAppFingerprint() {
   try {
-    // Mobile apps would use Capacitor or similar
-    // For Android: Settings.Secure.ANDROID_ID
-    // For iOS: identifierForVendor
+    // Check if we're in a Tauri mobile context
+    if (typeof window !== "undefined" && window.__TAURI__) {
+      // Dynamic import of the machine-uid plugin
+      const { commands } = await import("@skipperndt/plugin-machine-uid");
 
-    if (
-      typeof window !== "undefined" &&
-      window.Capacitor &&
-      typeof __CAPACITOR_BUILD__ !== "undefined" &&
-      __CAPACITOR_BUILD__
-    ) {
-      // Dynamic import only in Capacitor builds
-      try {
-        // Use dynamic import with a variable to prevent Vite from resolving it at build time
-        const capacitorDeviceModule = "@capacitor" + "/device";
-        const { Device } = await import(
-          /* @vite-ignore */ capacitorDeviceModule
-        );
-        const info = await Device.getId();
-        return sha256(info.uuid);
-      } catch (error) {
-        console.warn("Capacitor Device plugin not available:", error);
-        // Fall back to browser fingerprinting
+      // Get mobile device UID using the plugin
+      const result = await commands.getMachineUid();
+
+      if (result.status === "ok" && result.data.id) {
+        return sha256(result.data.id);
+      } else {
+        console.warn("Machine UID plugin returned no ID for mobile, using fallback");
         return await generateBrowserFingerprint();
       }
     }
 
-    // If not in mobile app context, fall back to browser fingerprinting
+    // If not in Tauri context, fall back to browser fingerprinting
     return await generateBrowserFingerprint();
   } catch (error) {
-    console.warn("Failed to get mobile device ID, using browser fallback");
+    console.warn("Failed to get mobile device ID, using browser fallback:", error);
     return await generateBrowserFingerprint();
   }
 }

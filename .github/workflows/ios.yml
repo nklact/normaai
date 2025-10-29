@@ -56,6 +56,24 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Configure Google OAuth URL Scheme in Info.plist
+        run: |
+          cd src-tauri/gen/apple
+
+          # Add Google OAuth URL scheme to Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleTypeRole string Editor" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string 'Google OAuth'" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string com.googleusercontent.apps.661564927057-spmsn2fh72qjc4ac1d3rkuqepfcvolkv" norma-ai_iOS/Info.plist 2>/dev/null || true
+
+          echo "✅ Google OAuth URL scheme configured in Info.plist"
+
+          # Verify the configuration
+          echo "Verifying Info.plist configuration:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" norma-ai_iOS/Info.plist || echo "⚠️ Could not verify URL types"
+
       - name: Configure Xcode project for manual code signing
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -101,6 +119,11 @@ jobs:
           # Supabase environment variables for frontend (required by @supabase/supabase-js)
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Google OAuth Client IDs (required for Google Sign-In)
+          VITE_GOOGLE_IOS_CLIENT_ID: ${{ secrets.VITE_GOOGLE_IOS_CLIENT_ID }}
+          VITE_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.VITE_GOOGLE_ANDROID_CLIENT_ID }}
+          VITE_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.VITE_GOOGLE_DESKTOP_CLIENT_ID }}
+          VITE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: |
           cd src-tauri
           cargo tauri ios build --export-method app-store-connect --verbose

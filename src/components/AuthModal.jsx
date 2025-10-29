@@ -141,8 +141,8 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
     try {
       const result = await apiService.signInWithGoogle();
 
-      // For mobile (ASWebAuthenticationSession), authentication is complete
-      // and session is returned directly
+      // For Tauri apps (iOS, Android, Desktop), authentication is complete
+      // and session is returned directly from tauri-plugin-google-auth
       if (result?.session) {
         setSuccess('Uspešno ste se prijavili!');
         setTimeout(() => {
@@ -150,8 +150,7 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
           onClose();
         }, 1000);
       }
-      // For desktop/web, OAuth redirect will happen automatically
-      // and session will be handled by deep link or redirect callback
+      // For web, OAuth redirect will happen automatically
     } catch (err) {
       console.error('Google login error:', err);
       setError(err.message || 'Google prijava nije uspela');

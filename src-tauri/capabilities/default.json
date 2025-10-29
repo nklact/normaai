@@ -14,8 +14,15 @@
     "updater:allow-download-and-install",
     "process:default",
     "process:allow-restart",
-    "deep-link:default",
-    "auth:default",
-    "auth:allow-authenticate"
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-delete",
+    "store:allow-has",
+    "store:allow-load",
+    "store:allow-save",
+    "google-auth:default",
+    "google-auth:allow-sign-in",
+    "google-auth:allow-sign-out"
   ]
 }

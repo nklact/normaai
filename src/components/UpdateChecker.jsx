@@ -11,8 +11,12 @@ export function UpdateChecker() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Only run on desktop (Tauri) builds
-    if (!window.__TAURI__) {
+    // Only run on desktop (Windows/Mac/Linux) builds, not on mobile
+    const isTauriApp = Boolean(window.__TAURI__);
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isDesktopApp = isTauriApp && !isMobileDevice;
+
+    if (!isDesktopApp) {
       return;
     }
 
@@ -32,8 +36,10 @@ export function UpdateChecker() {
         console.log('No updates available');
       }
     } catch (err) {
-      console.error('Update check failed:', err);
-      setError('Failed to check for updates');
+      // Silently fail in development or if update endpoint is not configured
+      // This is expected when developing locally or if GitHub releases aren't set up yet
+      console.warn('Update check failed (this is normal in development):', err.message);
+      // Don't set error state - just fail silently
     }
   };
 
@@ -85,7 +91,11 @@ export function UpdateChecker() {
   };
 
   // Don't render anything if not on desktop or no update available
-  if (!window.__TAURI__ || !updateAvailable) {
+  const isTauriApp = Boolean(window.__TAURI__);
+  const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isDesktopApp = isTauriApp && !isMobileDevice;
+
+  if (!isDesktopApp || !updateAvailable) {
     return null;
   }
 
