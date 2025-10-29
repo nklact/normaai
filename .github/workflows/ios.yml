@@ -73,12 +73,27 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:2 string com.google.gpages" norma-ai_iOS/Info.plist 2>/dev/null || true
 
           # Add Google OAuth URL scheme to Info.plist
+          # First, check if CFBundleURLTypes already exists
+          echo "Checking existing CFBundleURLTypes:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" norma-ai_iOS/Info.plist 2>/dev/null || echo "No existing CFBundleURLTypes"
+
+          # Count existing entries
+          EXISTING_COUNT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes" norma-ai_iOS/Info.plist 2>/dev/null | grep -c "Dict" || echo "0")
+          echo "Existing CFBundleURLTypes count: $EXISTING_COUNT"
+
+          # Create array if it doesn't exist
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" norma-ai_iOS/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" norma-ai_iOS/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleTypeRole string Editor" norma-ai_iOS/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string 'Google OAuth'" norma-ai_iOS/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" norma-ai_iOS/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string com.googleusercontent.apps.661564927057-spmsn2fh72qjc4ac1d3rkuqepfcvolkv" norma-ai_iOS/Info.plist 2>/dev/null || true
+
+          # Add Google OAuth as a NEW entry (not overwriting index 0)
+          # Use the count as the new index
+          NEW_INDEX=$EXISTING_COUNT
+          echo "Adding Google OAuth at index: $NEW_INDEX"
+
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:$NEW_INDEX dict" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:$NEW_INDEX:CFBundleTypeRole string Editor" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:$NEW_INDEX:CFBundleURLName string 'Google OAuth'" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:$NEW_INDEX:CFBundleURLSchemes array" norma-ai_iOS/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:$NEW_INDEX:CFBundleURLSchemes:0 string com.googleusercontent.apps.661564927057-spmsn2fh72qjc4ac1d3rkuqepfcvolkv" norma-ai_iOS/Info.plist 2>/dev/null || true
 
           echo "✅ Google OAuth configuration added to Info.plist"
 
