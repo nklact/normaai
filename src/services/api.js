@@ -284,8 +284,10 @@ class ApiService {
           console.log('🔍 DEBUG: iOS Client ID type:', typeof clientId);
         } else if (isAndroid) {
           clientId = GOOGLE_OAUTH_CONFIG.android.clientId;
+          clientSecret = GOOGLE_OAUTH_CONFIG.android.clientSecret;
           console.log('🔍 DEBUG: Android Client ID:', clientId);
           console.log('🔍 DEBUG: Android Client ID type:', typeof clientId);
+          console.log('🔍 DEBUG: Android Client Secret exists:', !!clientSecret);
         } else if (isDesktop) {
           clientId = GOOGLE_OAUTH_CONFIG.desktop.clientId;
           clientSecret = GOOGLE_OAUTH_CONFIG.desktop.clientSecret;
@@ -318,8 +320,9 @@ class ApiService {
           scopes: ['openid', 'email', 'profile'],
         };
 
-        // Only add clientSecret for desktop (OAuth flow)
-        if (isDesktop && clientSecret) {
+        // Add clientSecret for Android and Desktop (both need it for token exchange)
+        // iOS does NOT use clientSecret (native SDK handles tokens internally)
+        if ((isAndroid || isDesktop) && clientSecret) {
           signInParams.clientSecret = clientSecret;
         }
 

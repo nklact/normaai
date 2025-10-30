@@ -4089,8 +4089,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-google-auth"
 version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f65779361f0768bce7a7320e467ce7fe0a7324b7d7880cf466b01f272afd4680"
+source = "git+https://github.com/nklact/tauri-plugin-google-auth?branch=main#439ea23a09e035b44ba6d5b96b0b57af5f2f3395"
 dependencies = [
  "oauth2",
  "open",
