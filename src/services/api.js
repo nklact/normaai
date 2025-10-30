@@ -315,9 +315,14 @@ class ApiService {
         console.log('🔍 DEBUG: Step 4 - Preparing signIn parameters...');
         const signInParams = {
           clientId: clientId,
-          clientSecret: clientSecret,
           scopes: ['openid', 'email', 'profile'],
         };
+
+        // Only add clientSecret for desktop (OAuth flow)
+        if (isDesktop && clientSecret) {
+          signInParams.clientSecret = clientSecret;
+        }
+
         console.log('🔍 DEBUG: signIn params:', JSON.stringify(signInParams, null, 2));
 
         console.log('🔐 DEBUG: Step 5 - Calling Google Sign In...');
