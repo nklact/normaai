@@ -32,9 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "2.8.4"
-
       - name: Update Tauri config with Team ID
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -46,7 +43,7 @@ jobs:
       - name: Initialize iOS project
         run: |
           cd src-tauri
-          cargo tauri ios init --skip-targets-install
+          npm run tauri ios init --skip-targets-install
 
           # Ensure iOS icons are in the asset catalog
           if [ -d "gen/apple/Assets.xcassets/AppIcon.appiconset" ]; then
@@ -104,7 +101,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           cd src-tauri
-          cargo tauri ios build --export-method app-store-connect --verbose
+          npm run tauri ios build --export-method app-store-connect --verbose
 
       - name: Upload to TestFlight
         env:
