@@ -21,9 +21,6 @@
     "store:allow-has",
     "store:allow-load",
     "store:allow-save",
-    "google-auth:default",
-    "google-auth:allow-sign-in",
-    "google-auth:allow-sign-out",
     "machine-uid:default",
     "machine-uid:allow-get-machine-uid"
   ]

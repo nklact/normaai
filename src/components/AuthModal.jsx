@@ -144,8 +144,8 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
       const result = await apiService.signInWithGoogle();
       console.log('🚀 apiService.signInWithGoogle() returned:', result);
 
-      // For Tauri apps (iOS, Android, Desktop), authentication is complete
-      // and session is returned directly from tauri-plugin-google-auth
+      // For Tauri mobile apps (iOS, Android), authentication is complete
+      // and session is returned directly from tauri-plugin-web-auth
       if (result?.session) {
         setSuccess('Uspešno ste se prijavili!');
         setTimeout(() => {

@@ -220,25 +220,13 @@ class ApiService {
   }
 
   /**
-   * Sign in with Google - Uses native Google SDKs on mobile, OAuth on desktop
-   * Works on: Web, Desktop (Windows/Mac/Linux), Mobile (iOS/Android)
+   * Sign in with Google - Unified OAuth flow across all platforms
    *
-   * iOS/Android Flow (Native Google SDK):
-   * 1. Call tauri-plugin-google-auth signIn()
-   * 2. Native Google SDK handles authentication
-   * 3. Returns Google ID token
-   * 4. Exchange ID token with Supabase using signInWithIdToken()
-   * 5. Get Supabase session
-   *
-   * Desktop Flow (OAuth with localhost):
-   * 1. Call tauri-plugin-google-auth signIn()
-   * 2. Opens browser with OAuth flow
-   * 3. Redirects to localhost server
-   * 4. Returns Google ID token
-   * 5. Exchange ID token with Supabase
-   *
-   * Web Flow:
-   * Standard Supabase OAuth redirect flow
+   * Platform Flows:
+   * - Web: Standard Supabase OAuth redirect
+   * - Desktop: Standard Supabase OAuth redirect (same as Web)
+   * - iOS: ASWebAuthenticationSession via tauri-plugin-web-auth
+   * - Android: Custom Tabs via tauri-plugin-web-auth
    */
   async signInWithGoogle() {
     console.log('🚀 signInWithGoogle() called');
@@ -249,157 +237,76 @@ class ApiService {
     const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = isTauriApp && /Android/i.test(navigator.userAgent);
     const isMobile = isIOS || isAndroid;
-    const isDesktop = isTauriApp && !isMobile;
 
     console.log('📍 Platform:',
-      isIOS ? 'Tauri iOS' :
-      isAndroid ? 'Tauri Android' :
-      isDesktop ? 'Tauri Desktop' :
-      'Web Browser');
+      isIOS ? 'iOS (ASWebAuthenticationSession)' :
+      isAndroid ? 'Android (Custom Tabs)' :
+      isTauriApp ? 'Desktop (Supabase OAuth)' :
+      'Web (Supabase OAuth)');
 
-    // Tauri apps (iOS, Android, Desktop): Use tauri-plugin-google-auth
-    if (isTauriApp) {
-      console.log('📱 Using tauri-plugin-google-auth');
-      console.log('🔍 DEBUG: Platform detection - isIOS:', isIOS, 'isAndroid:', isAndroid, 'isDesktop:', isDesktop);
+    // Mobile (iOS/Android): Use tauri-plugin-web-auth for in-app browser
+    if (isMobile) {
+      console.log('📱 Using tauri-plugin-web-auth for mobile OAuth');
 
       try {
-        console.log('🔍 DEBUG: Step 1 - About to import tauri-plugin-google-auth-api...');
-        console.log('🔍 DEBUG: window.__TAURI__ exists:', !!window.__TAURI__);
+        // Import Tauri's invoke function
+        const { invoke } = await import('@tauri-apps/api/core');
 
-        const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api');
-        console.log('🔍 DEBUG: Step 1 COMPLETE - signIn function imported successfully');
-        console.log('🔍 DEBUG: Step 1 - signIn function imported:', typeof signIn);
-
-        console.log('🔍 DEBUG: Step 2 - Importing google-oauth config...');
-        const { GOOGLE_OAUTH_CONFIG } = await import('../config/google-oauth.js');
-        console.log('🔍 DEBUG: Step 2 - GOOGLE_OAUTH_CONFIG loaded:', JSON.stringify(GOOGLE_OAUTH_CONFIG, null, 2));
-
-        // Select the appropriate Client ID based on platform
-        let clientId, clientSecret;
-
-        console.log('🔍 DEBUG: Step 3 - Selecting platform-specific config...');
-        if (isIOS) {
-          clientId = GOOGLE_OAUTH_CONFIG.ios.clientId;
-          console.log('🔍 DEBUG: iOS Client ID:', clientId);
-          console.log('🔍 DEBUG: iOS Client ID type:', typeof clientId);
-        } else if (isAndroid) {
-          clientId = GOOGLE_OAUTH_CONFIG.android.clientId;
-          clientSecret = GOOGLE_OAUTH_CONFIG.android.clientSecret;
-          console.log('🔍 DEBUG: Android Client ID:', clientId);
-          console.log('🔍 DEBUG: Android Client ID type:', typeof clientId);
-          console.log('🔍 DEBUG: Android Client Secret exists:', !!clientSecret);
-        } else if (isDesktop) {
-          clientId = GOOGLE_OAUTH_CONFIG.desktop.clientId;
-          clientSecret = GOOGLE_OAUTH_CONFIG.desktop.clientSecret;
-          console.log('🔍 DEBUG: Desktop Client ID:', clientId);
-          console.log('🔍 DEBUG: Desktop Client Secret exists:', !!clientSecret);
+        // Get Supabase URL from environment
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('VITE_SUPABASE_URL not configured');
         }
 
-        if (!clientId) {
-          console.error('❌ DEBUG: clientId is missing!');
-          throw new Error('Google OAuth Client ID is not configured. Please check your environment variables.');
+        // Build OAuth URL for Google via Supabase
+        // Supabase will handle the OAuth flow and redirect back with tokens
+        const callbackScheme = `${supabaseUrl}/auth/v1/callback`;
+        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${window.location.origin}/auth/callback`;
+
+        console.log('🔐 Opening in-app browser for OAuth...');
+        console.log('Auth URL:', authUrl);
+
+        // Call the plugin's authenticate command
+        // This opens ASWebAuthenticationSession (iOS) or Custom Tabs (Android)
+        const callbackUrl = await invoke('plugin:web-auth|authenticate', {
+          url: authUrl,
+          callbackUrlScheme: callbackScheme
+        });
+
+        console.log('✅ OAuth callback received:', callbackUrl);
+
+        // Parse the callback URL to extract tokens
+        const url = new URL(callbackUrl);
+        const accessToken = url.searchParams.get('access_token');
+        const refreshToken = url.searchParams.get('refresh_token');
+
+        if (!accessToken) {
+          throw new Error('No access token in callback URL');
         }
 
-        // Additional iOS validation
-        if (isIOS) {
-          console.log('🔍 DEBUG: Validating iOS Client ID format...');
-          if (typeof clientId !== 'string' || clientId === 'undefined' || clientId === '') {
-            console.error('❌ DEBUG: iOS Client ID is invalid:', clientId);
-            throw new Error('iOS Google Client ID is not properly configured. Please ensure VITE_GOOGLE_IOS_CLIENT_ID is set correctly in your build environment.');
-          }
-          if (!clientId.includes('.apps.googleusercontent.com')) {
-            console.warn('⚠️ DEBUG: iOS Client ID might be incorrect format. Expected format: XXXXX.apps.googleusercontent.com');
-            console.warn('⚠️ DEBUG: Current value:', clientId);
-          }
-          console.log('✅ DEBUG: iOS Client ID format validation passed');
-        }
-
-        console.log('🔍 DEBUG: Step 4 - Preparing signIn parameters...');
-        const signInParams = {
-          clientId: clientId,
-          scopes: ['openid', 'email', 'profile'],
-        };
-
-        // Add clientSecret for Android and Desktop (both need it for token exchange)
-        // iOS does NOT use clientSecret (native SDK handles tokens internally)
-        if ((isAndroid || isDesktop) && clientSecret) {
-          signInParams.clientSecret = clientSecret;
-        }
-
-        console.log('🔍 DEBUG: signIn params:', JSON.stringify(signInParams, null, 2));
-
-        console.log('🔐 DEBUG: Step 5 - Calling Google Sign In...');
-        console.log('🔐 DEBUG: About to call native signIn with clientId:', clientId.substring(0, 20) + '...');
-
-        let response;
-        try {
-          response = await signIn(signInParams);
-          console.log('✅ DEBUG: Step 6 - Google authentication successful');
-        } catch (signInError) {
-          console.error('❌ DEBUG: signIn() call failed');
-          console.error('❌ DEBUG: This might indicate:');
-          console.error('   - Wrong Client ID type (Web instead of iOS)');
-          console.error('   - Missing URL scheme in Info.plist');
-          console.error('   - Client ID not registered in Google Cloud Console');
-          console.error('❌ DEBUG: Error:', signInError);
-          throw new Error(`Google Sign In failed: ${signInError?.message || 'Unknown native error'}`);
-        }
-
-        console.log('🔍 DEBUG: Response keys:', Object.keys(response || {}));
-        console.log('🔍 DEBUG: Has idToken:', !!response?.idToken);
-
-        // Exchange Google ID token with Supabase
-        console.log('🔄 Exchanging Google ID token with Supabase...');
-
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: 'google',
-          token: response.idToken,
+        // Set the session in Supabase
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
         });
 
         if (error) {
-          console.error('❌ Supabase signInWithIdToken error:', error);
-          throw new Error(error.message || 'Failed to sign in with Supabase');
+          console.error('❌ Failed to set Supabase session:', error);
+          throw new Error(error.message || 'Failed to set session');
         }
 
-        console.log('✅ Supabase session obtained successfully');
-
-        // Store device fingerprint
-        if (data.user) {
-          try {
-            await this.updateDeviceFingerprint(deviceFingerprint);
-          } catch (err) {
-            console.warn('Failed to update device fingerprint:', err);
-          }
-        }
+        console.log('✅ Supabase session established');
 
         return { session: data.session, user: data.user };
 
       } catch (authError) {
-        console.error('❌ DEBUG: Tauri Google Sign In failed at some step');
-        console.error('❌ DEBUG: Error name:', authError?.name);
-        console.error('❌ DEBUG: Error message:', authError?.message);
-        console.error('❌ DEBUG: Error stack:', authError?.stack);
-        console.error('❌ DEBUG: Full error object:', JSON.stringify(authError, Object.getOwnPropertyNames(authError), 2));
-
-        // Try to identify which step failed
-        if (authError?.message?.includes('not configured')) {
-          console.error('❌ DEBUG: Failed at Step 3 - Client ID validation');
-        } else if (authError?.message?.includes('import')) {
-          console.error('❌ DEBUG: Failed at Step 1 or 2 - Module import');
-        } else if (authError?.message?.includes('signIn')) {
-          console.error('❌ DEBUG: Failed at Step 5 - Calling signIn function');
-        } else if (authError?.message?.includes('Supabase')) {
-          console.error('❌ DEBUG: Failed at Step 7 - Supabase token exchange');
-        } else {
-          console.error('❌ DEBUG: Failed at unknown step - check error details above');
-        }
-
+        console.error('❌ Mobile OAuth failed:', authError);
         throw new Error(authError.message || 'Google prijava nije uspela');
       }
     }
 
-    // Web: Standard Supabase OAuth flow
-    console.log('🌐 Web browser - using Supabase OAuth');
+    // Web & Desktop: Standard Supabase OAuth flow (redirect-based)
+    console.log('🌐 Using Supabase OAuth (redirect flow)');
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -417,7 +324,7 @@ class ApiService {
       throw new Error(error.message || 'Google prijava nije uspela');
     }
 
-    // Web: Supabase will handle the redirect
+    // Supabase will handle the redirect
     return data;
   }
 

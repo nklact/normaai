@@ -25,14 +25,13 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_google_auth::init())
         .plugin(tauri_plugin_machine_uid::init());
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_google_auth::init())
+        .plugin(tauri_plugin_web_auth::init())
         .plugin(tauri_plugin_machine_uid::init());
 
     builder

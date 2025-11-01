@@ -1,7 +1,7 @@
 {
   "name": "norma-ai",
   "private": true,
-  "version": "0.4.10",
+  "version": "0.4.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,6 @@
     "generate-ico-icns": "node scripts/generate-ico-icns.js"
   },
   "dependencies": {
-    "@choochmeque/tauri-plugin-google-auth-api": "^0.3.3",
     "@skipperndt/plugin-machine-uid": "^0.1.2",
     "@supabase/supabase-js": "^2.49.1",
     "@tauri-apps/api": "^2.8.0",
