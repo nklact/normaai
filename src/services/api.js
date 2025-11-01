@@ -249,8 +249,8 @@ class ApiService {
       console.log('📱 Using tauri-plugin-web-auth for mobile OAuth');
 
       try {
-        // Import Tauri's invoke function
-        const { invoke } = await import('@tauri-apps/api/core');
+        // Import the authenticate function from the plugin
+        const { authenticate } = await import('tauri-plugin-web-auth-api');
 
         // Get Supabase URL from environment
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -266,17 +266,17 @@ class ApiService {
         console.log('🔐 Opening in-app browser for OAuth...');
         console.log('Auth URL:', authUrl);
 
-        // Call the plugin's authenticate command
+        // Call the plugin's authenticate function
         // This opens ASWebAuthenticationSession (iOS) or Custom Tabs (Android)
-        const callbackUrl = await invoke('plugin:web-auth|authenticate', {
+        const result = await authenticate({
           url: authUrl,
-          callbackUrlScheme: callbackScheme
+          callbackScheme: callbackScheme
         });
 
-        console.log('✅ OAuth callback received:', callbackUrl);
+        console.log('✅ OAuth callback received:', result.callbackUrl);
 
         // Parse the callback URL to extract tokens
-        const url = new URL(callbackUrl);
+        const url = new URL(result.callbackUrl);
         const accessToken = url.searchParams.get('access_token');
         const refreshToken = url.searchParams.get('refresh_token');
 
