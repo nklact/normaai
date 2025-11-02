@@ -43,6 +43,11 @@
     ],
     "iOS": {
       "developmentTeam": "$APPLE_TEAM_ID"
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
     }
   },
   "plugins": {
