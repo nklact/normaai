@@ -236,7 +236,9 @@ function App() {
       setChats(chatList);
 
       // Auto-create first chat if none exist (like ChatGPT) - but only once during init
-      if (chatList.length === 0 && !hasAttemptedInitialChatCreation.current) {
+      // AND only if there's no current empty chat already
+      const hasEmptyCurrentChat = currentChatId && messages.length === 0;
+      if (chatList.length === 0 && !hasAttemptedInitialChatCreation.current && !hasEmptyCurrentChat) {
         console.log('🔍 DEBUG: loadChats() - no chats found, calling createNewChat()');
         hasAttemptedInitialChatCreation.current = true;
         await createNewChat();
@@ -244,6 +246,9 @@ function App() {
         // If chats exist but none selected, select the most recent
         console.log('🔍 DEBUG: loadChats() - chats exist, selecting most recent');
         setCurrentChatId(chatList[0].id);
+      } else if (hasEmptyCurrentChat) {
+        // If there's already an empty chat (e.g., from trial), keep it
+        console.log('🔍 DEBUG: loadChats() - keeping existing empty chat');
       }
     } catch (error) {
       console.error("Error loading chats:", error);

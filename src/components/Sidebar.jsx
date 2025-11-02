@@ -237,7 +237,7 @@ const Sidebar = ({
         </div>
 
         {/* Overlay for unregistered users */}
-        {!isAuthenticated && chats.length > 0 && (
+        {!isAuthenticated && (
           <div className="chat-history-overlay">
             <div className="overlay-content">
               <h3>Istorija razgovora</h3>

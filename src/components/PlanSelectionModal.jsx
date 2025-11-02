@@ -285,7 +285,7 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={onClose}>
-                Otkaži
+                Nazad
               </button>
             </div>
           </>

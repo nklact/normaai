@@ -2,7 +2,6 @@
 .modal-content.plan-selection {
   max-width: 1140px;
   width: 95%;
-  max-height: 90vh;
   overflow-y: auto;
 }
 
@@ -455,8 +454,8 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .modal-content.plan-selection {
-    max-width: 95%;
-    margin: 20px auto;
+    width: 100%;
+    max-width: 100%;
   }
 
   .current-status {
