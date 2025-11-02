@@ -23,7 +23,6 @@
     "store:allow-save",
     "machine-uid:default",
     "machine-uid:allow-get-machine-uid",
-    "web-auth:default",
-    "web-auth:allow-authenticate"
+    "oauth:default"
   ]
 }

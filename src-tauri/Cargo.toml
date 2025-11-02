@@ -29,8 +29,12 @@ tauri-plugin-machine-uid = "0.1.2"
 # Pin schemars to 0.8.21 to avoid incompatibility with indexmap 1.9.3
 schemars = "=0.8.21"
 
-# OAuth for ALL Tauri platforms (Desktop + Mobile): ASWebAuthenticationSession (iOS), Custom Tabs (Android), System Browser (Desktop)
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
+# OAuth for Desktop: Localhost callback server (Windows, macOS, Linux)
+[target.'cfg(not(any(target_os = "ios", target_os = "android", target_family = "wasm")))'.dependencies]
+tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "v2" }
+
+# OAuth for Mobile: ASWebAuthenticationSession (iOS), Custom Tabs (Android)
+[target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
 tauri-plugin-web-auth = "1.0"
 
 # iOS-specific dependencies for keyboard scroll prevention

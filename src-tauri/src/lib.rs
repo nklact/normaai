@@ -27,7 +27,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_web_auth::init()) // OAuth for desktop
+        .plugin(tauri_plugin_oauth::init()) // OAuth for desktop (localhost callback)
         .plugin(tauri_plugin_machine_uid::init());
 
     // Mobile-specific plugins (no updater or process)
@@ -35,7 +35,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile
+        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile (custom URL schemes)
         .plugin(tauri_plugin_machine_uid::init());
 
     builder

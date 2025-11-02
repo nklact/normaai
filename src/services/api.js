@@ -224,7 +224,7 @@ class ApiService {
    *
    * Platform Flows:
    * - Web: Standard Supabase OAuth redirect
-   * - Desktop: Custom URL scheme via tauri-plugin-web-auth (same as mobile)
+   * - Desktop: Localhost callback via tauri-plugin-oauth (external browser)
    * - iOS: ASWebAuthenticationSession via tauri-plugin-web-auth
    * - Android: Custom Tabs via tauri-plugin-web-auth
    */
@@ -241,12 +241,90 @@ class ApiService {
     console.log('📍 Platform:',
       isIOS ? 'iOS (ASWebAuthenticationSession)' :
       isAndroid ? 'Android (Custom Tabs)' :
-      isDesktop ? 'Desktop (tauri-plugin-web-auth)' :
+      isDesktop ? 'Desktop (localhost callback)' :
       'Web (Supabase OAuth)');
 
-    // ALL Tauri platforms (Desktop + Mobile): Use tauri-plugin-web-auth with custom URL scheme
-    if (isTauriApp) {
-      console.log('🔐 Using tauri-plugin-web-auth for Tauri OAuth');
+    // Desktop: Use localhost callback (industry standard)
+    if (isDesktop) {
+      console.log('🖥️ Using tauri-plugin-oauth for desktop (localhost callback)');
+
+      try {
+        // Import the oauth plugin
+        const { start } = await import('@fabianlars/tauri-plugin-oauth');
+        const { open } = await import('@tauri-apps/plugin-opener');
+
+        // Start localhost server and get the port
+        const port = await start();
+        const redirectUrl = `http://localhost:${port}`;
+
+        console.log('🔐 Started OAuth server on:', redirectUrl);
+
+        // Get Supabase URL
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('VITE_SUPABASE_URL not configured');
+        }
+
+        // Build Supabase OAuth URL with localhost redirect
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true, // Don't auto-redirect, we'll open manually
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          }
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to initiate OAuth');
+        }
+
+        console.log('🌐 Opening system browser for OAuth...');
+        console.log('OAuth URL:', data.url);
+
+        // Open system browser
+        await open(data.url);
+
+        console.log('⏳ Waiting for OAuth callback...');
+
+        // The plugin will automatically capture the callback
+        // Supabase PKCE flow will handle the code exchange
+        // Listen for the callback via Supabase's session detection
+        return new Promise((resolve, reject) => {
+          // Set a timeout for OAuth flow (5 minutes)
+          const timeout = setTimeout(() => {
+            reject(new Error('OAuth timeout - user did not complete authentication'));
+          }, 5 * 60 * 1000);
+
+          // Poll for session (Supabase will auto-exchange PKCE code)
+          const checkSession = setInterval(async () => {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (session) {
+              clearTimeout(timeout);
+              clearInterval(checkSession);
+              console.log('✅ Desktop OAuth successful, session established');
+              resolve({ session, user: session.user });
+            } else if (sessionError) {
+              clearTimeout(timeout);
+              clearInterval(checkSession);
+              reject(sessionError);
+            }
+          }, 1000); // Check every second
+        });
+
+      } catch (authError) {
+        console.error('❌ Desktop OAuth failed:', authError);
+        throw new Error(authError.message || 'Google prijava nije uspela');
+      }
+    }
+
+    // Mobile (iOS/Android): Use custom URL schemes
+    if (isIOS || isAndroid) {
+      console.log('📱 Using tauri-plugin-web-auth for mobile OAuth');
 
       try {
         // Import the authenticate function from the plugin
@@ -265,10 +343,9 @@ class ApiService {
         // Build Supabase OAuth URL with custom redirect
         const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-        console.log('🔐 Opening browser for OAuth via Supabase...');
+        console.log('🔐 Opening in-app browser for OAuth via Supabase...');
         console.log('Auth URL:', authUrl);
         console.log('Callback scheme:', callbackScheme);
-        console.log('Redirect URI:', redirectUri);
 
         // Call plugin with valid custom scheme
         const result = await authenticate({
@@ -280,7 +357,6 @@ class ApiService {
 
         // Parse callback URL - Supabase returns tokens in hash fragment
         const callbackUrl = result.callbackUrl;
-        console.log('Full callback URL:', callbackUrl);
 
         // Extract tokens from URL (can be in hash or query params)
         let accessToken, refreshToken;
@@ -329,7 +405,7 @@ class ApiService {
         return { session: data.session, user: data.user };
 
       } catch (authError) {
-        console.error('❌ Tauri OAuth failed:', authError);
+        console.error('❌ Mobile OAuth failed:', authError);
         throw new Error(authError.message || 'Google prijava nije uspela');
       }
     }
@@ -363,37 +439,99 @@ class ApiService {
     // Detect platform
     const isTauriApp = Boolean(window.__TAURI__);
     const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = isTauriApp && /Android/i.test(navigator.userAgent);
+    const isDesktop = isTauriApp && !isIOS && !isAndroid;
 
-    console.log('📍 Platform:', isIOS ? 'iOS (ASWebAuthenticationSession)' : 'Other');
+    console.log('📍 Platform:',
+      isIOS ? 'iOS (ASWebAuthenticationSession)' :
+      isAndroid ? 'Android (Custom Tabs)' :
+      isDesktop ? 'Desktop (localhost callback)' :
+      'Web');
 
-    // ALL Tauri platforms: Use tauri-plugin-web-auth with Supabase OAuth proxy
-    // Note: Apple Sign-In works best on iOS, but technically available on all platforms
-    if (isTauriApp) {
-      console.log('🍎 Using tauri-plugin-web-auth for Apple Sign-In');
+    // Desktop: Use localhost callback (same as Google)
+    if (isDesktop) {
+      console.log('🖥️ Using tauri-plugin-oauth for desktop Apple Sign-In (localhost callback)');
 
       try {
-        // Import the authenticate function from the plugin
-        const { authenticate } = await import('tauri-plugin-web-auth-api');
+        const { start } = await import('@fabianlars/tauri-plugin-oauth');
+        const { open } = await import('@tauri-apps/plugin-opener');
 
-        // Get Supabase URL
+        const port = await start();
+        const redirectUrl = `http://localhost:${port}`;
+
+        console.log('🔐 Started OAuth server on:', redirectUrl);
+
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         if (!supabaseUrl) {
           throw new Error('VITE_SUPABASE_URL not configured');
         }
 
-        // Use custom URL scheme callback (must match app identifier)
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          }
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to initiate OAuth');
+        }
+
+        console.log('🌐 Opening system browser for Apple OAuth...');
+        await open(data.url);
+
+        console.log('⏳ Waiting for OAuth callback...');
+
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('OAuth timeout - user did not complete authentication'));
+          }, 5 * 60 * 1000);
+
+          const checkSession = setInterval(async () => {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (session) {
+              clearTimeout(timeout);
+              clearInterval(checkSession);
+              console.log('✅ Desktop Apple OAuth successful, session established');
+              resolve({ session, user: session.user });
+            } else if (sessionError) {
+              clearTimeout(timeout);
+              clearInterval(checkSession);
+              reject(sessionError);
+            }
+          }, 1000);
+        });
+
+      } catch (authError) {
+        console.error('❌ Desktop Apple Sign-In failed:', authError);
+        throw new Error(authError.message || 'Apple prijava nije uspela');
+      }
+    }
+
+    // Mobile (iOS only): Apple Sign-In via custom URL scheme
+    if (isIOS) {
+      console.log('📱 Using tauri-plugin-web-auth for iOS Apple Sign-In');
+
+      try {
+        const { authenticate } = await import('tauri-plugin-web-auth-api');
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('VITE_SUPABASE_URL not configured');
+        }
+
         const callbackScheme = 'com.nikola.norma-ai';
         const redirectUri = `${callbackScheme}://oauth-callback`;
-
-        // Build Supabase Apple OAuth URL with custom redirect
         const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=apple&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-        console.log('🍎 Opening browser for Apple OAuth via Supabase...');
-        console.log('Auth URL:', authUrl);
-        console.log('Callback scheme:', callbackScheme);
-        console.log('Redirect URI:', redirectUri);
+        console.log('🍎 Opening in-app browser for Apple OAuth...');
 
-        // Call plugin with valid custom scheme
         const result = await authenticate({
           url: authUrl,
           callbackScheme: callbackScheme
@@ -401,14 +539,9 @@ class ApiService {
 
         console.log('✅ OAuth callback received:', result.callbackUrl);
 
-        // Parse callback URL - Supabase returns tokens in hash fragment
         const callbackUrl = result.callbackUrl;
-        console.log('Full callback URL:', callbackUrl);
-
-        // Extract tokens from URL (can be in hash or query params)
         let accessToken, refreshToken;
 
-        // Try hash fragment first (standard Supabase response)
         if (callbackUrl.includes('#')) {
           const hashPart = callbackUrl.split('#')[1];
           const hashParams = new URLSearchParams(hashPart);
@@ -416,14 +549,12 @@ class ApiService {
           refreshToken = hashParams.get('refresh_token');
         }
 
-        // Fallback to query params
         if (!accessToken) {
           const url = new URL(callbackUrl);
           accessToken = url.searchParams.get('access_token');
           refreshToken = url.searchParams.get('refresh_token');
         }
 
-        // Check for errors
         const url = new URL(callbackUrl);
         const error = url.searchParams.get('error') || url.searchParams.get('error_description');
 
@@ -437,7 +568,6 @@ class ApiService {
 
         console.log('📤 Setting Supabase session with tokens...');
 
-        // Set the session in Supabase
         const { data, error: authError } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
@@ -452,13 +582,13 @@ class ApiService {
         return { session: data.session, user: data.user };
 
       } catch (authError) {
-        console.error('❌ Apple Sign-In failed:', authError);
+        console.error('❌ iOS Apple Sign-In failed:', authError);
         throw new Error(authError.message || 'Apple prijava nije uspela');
       }
     }
 
-    // Non-Tauri platforms: Apple Sign-In is not supported
-    throw new Error('Apple Sign-In is only available on Tauri platforms');
+    // Non-supported platforms
+    throw new Error('Apple Sign-In is only available on iOS and desktop platforms');
   }
 
 

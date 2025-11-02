@@ -12,6 +12,7 @@
     "generate-ico-icns": "node scripts/generate-ico-icns.js"
   },
   "dependencies": {
+    "@fabianlars/tauri-plugin-oauth": "^2.0.0",
     "@skipperndt/plugin-machine-uid": "^0.1.2",
     "@supabase/supabase-js": "^2.49.1",
     "@tauri-apps/api": "^2.9.0",
