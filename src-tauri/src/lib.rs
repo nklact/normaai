@@ -2,6 +2,7 @@
 #[cfg(target_os = "ios")]
 mod webview_helper;
 
+#[cfg(target_os = "ios")]
 use tauri::Manager;
 
 #[tauri::command]
@@ -19,27 +20,30 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Desktop-specific plugins (updater and process don't work on mobile)
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_web_auth::init()) // OAuth for desktop
         .plugin(tauri_plugin_machine_uid::init());
 
+    // Mobile-specific plugins (no updater or process)
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_web_auth::init())
+        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile
         .plugin(tauri_plugin_machine_uid::init());
 
     builder
-        .setup(|app| {
+        .setup(|_app| {
             // iOS: Prevent keyboard from scrolling webview and creating extra space
             #[cfg(target_os = "ios")]
             {
-                if let Some(webview_window) = app.get_webview_window("main") {
+                if let Some(webview_window) = _app.get_webview_window("main") {
                     webview_helper::disable_scroll_on_keyboard_show(&webview_window);
 
                     // Enable Safari Web Inspector for debugging (iOS 16.4+)

@@ -224,7 +224,7 @@ class ApiService {
    *
    * Platform Flows:
    * - Web: Standard Supabase OAuth redirect
-   * - Desktop: Standard Supabase OAuth redirect (same as Web)
+   * - Desktop: Custom URL scheme via tauri-plugin-web-auth (same as mobile)
    * - iOS: ASWebAuthenticationSession via tauri-plugin-web-auth
    * - Android: Custom Tabs via tauri-plugin-web-auth
    */
@@ -236,17 +236,17 @@ class ApiService {
     const isTauriApp = Boolean(window.__TAURI__);
     const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = isTauriApp && /Android/i.test(navigator.userAgent);
-    const isMobile = isIOS || isAndroid;
+    const isDesktop = isTauriApp && !isIOS && !isAndroid;
 
     console.log('📍 Platform:',
       isIOS ? 'iOS (ASWebAuthenticationSession)' :
       isAndroid ? 'Android (Custom Tabs)' :
-      isTauriApp ? 'Desktop (Supabase OAuth)' :
+      isDesktop ? 'Desktop (tauri-plugin-web-auth)' :
       'Web (Supabase OAuth)');
 
-    // Mobile (iOS/Android): Use tauri-plugin-web-auth for in-app browser
-    if (isMobile) {
-      console.log('📱 Using tauri-plugin-web-auth for mobile OAuth');
+    // ALL Tauri platforms (Desktop + Mobile): Use tauri-plugin-web-auth with custom URL scheme
+    if (isTauriApp) {
+      console.log('🔐 Using tauri-plugin-web-auth for Tauri OAuth');
 
       try {
         // Import the authenticate function from the plugin
@@ -258,142 +258,19 @@ class ApiService {
           throw new Error('VITE_SUPABASE_URL not configured');
         }
 
-        // ✅ FIX: Use Supabase OAuth with custom URL scheme callback
-        // Google allows Supabase's redirect URIs but not custom schemes directly
-        const callbackScheme = 'com.nikola.norma-ai'; // Must match app identifier
+        // Use custom URL scheme callback (must match app identifier)
+        const callbackScheme = 'com.nikola.norma-ai';
         const redirectUri = `${callbackScheme}://oauth-callback`;
 
         // Build Supabase OAuth URL with custom redirect
         const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUri)}`;
 
-        console.log('🔐 Opening native browser for OAuth via Supabase...');
+        console.log('🔐 Opening browser for OAuth via Supabase...');
         console.log('Auth URL:', authUrl);
         console.log('Callback scheme:', callbackScheme);
         console.log('Redirect URI:', redirectUri);
 
-        // ✅ Call plugin with valid custom scheme
-        const result = await authenticate({
-          url: authUrl,
-          callbackScheme: callbackScheme // ✅ Valid: "com.nikola.norma-ai" (not HTTPS URL)
-        });
-
-        console.log('✅ OAuth callback received:', result.callbackUrl);
-
-        // Parse callback URL - Supabase returns tokens in hash fragment
-        const callbackUrl = result.callbackUrl;
-        console.log('Full callback URL:', callbackUrl);
-
-        // Extract tokens from URL (can be in hash or query params)
-        let accessToken, refreshToken;
-
-        // Try hash fragment first (standard Supabase response)
-        if (callbackUrl.includes('#')) {
-          const hashPart = callbackUrl.split('#')[1];
-          const hashParams = new URLSearchParams(hashPart);
-          accessToken = hashParams.get('access_token');
-          refreshToken = hashParams.get('refresh_token');
-        }
-
-        // Fallback to query params
-        if (!accessToken) {
-          const url = new URL(callbackUrl);
-          accessToken = url.searchParams.get('access_token');
-          refreshToken = url.searchParams.get('refresh_token');
-        }
-
-        // Check for errors
-        const url = new URL(callbackUrl);
-        const error = url.searchParams.get('error') || url.searchParams.get('error_description');
-
-        if (error) {
-          throw new Error(`OAuth error: ${error}`);
-        }
-
-        if (!accessToken) {
-          throw new Error('No access token in callback URL');
-        }
-
-        console.log('📤 Setting Supabase session with tokens...');
-
-        // Set the session in Supabase
-        const { data, error: authError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        });
-
-        if (authError) {
-          console.error('❌ Failed to set Supabase session:', authError);
-          throw new Error(authError.message || 'Failed to set session');
-        }
-
-        console.log('✅ Supabase session established');
-        return { session: data.session, user: data.user };
-
-      } catch (authError) {
-        console.error('❌ Mobile OAuth failed:', authError);
-        throw new Error(authError.message || 'Google prijava nije uspela');
-      }
-    }
-
-    // Web & Desktop: Standard Supabase OAuth flow (redirect-based)
-    console.log('🌐 Using Supabase OAuth (redirect flow)');
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/auth/callback',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      }
-    });
-
-    if (error) {
-      console.error('❌ Supabase signInWithOAuth error:', error);
-      throw new Error(error.message || 'Google prijava nije uspela');
-    }
-
-    // Supabase will handle the redirect
-    return data;
-  }
-
-  async signInWithApple() {
-    console.log('🍎 signInWithApple() called');
-
-    // Detect platform
-    const isTauriApp = Boolean(window.__TAURI__);
-    const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-    console.log('📍 Platform:', isIOS ? 'iOS (ASWebAuthenticationSession)' : 'Other');
-
-    // iOS: Use tauri-plugin-web-auth with Supabase OAuth proxy
-    if (isIOS) {
-      console.log('📱 Using tauri-plugin-web-auth for iOS Apple Sign-In');
-
-      try {
-        // Import the authenticate function from the plugin
-        const { authenticate } = await import('tauri-plugin-web-auth-api');
-
-        // Get Supabase URL
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        if (!supabaseUrl) {
-          throw new Error('VITE_SUPABASE_URL not configured');
-        }
-
-        // ✅ Use Supabase OAuth with custom URL scheme callback
-        const callbackScheme = 'com.nikola.norma-ai'; // Must match app identifier
-        const redirectUri = `${callbackScheme}://oauth-callback`;
-
-        // Build Supabase Apple OAuth URL with custom redirect
-        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=apple&redirect_to=${encodeURIComponent(redirectUri)}`;
-
-        console.log('🍎 Opening native browser for Apple OAuth via Supabase...');
-        console.log('Auth URL:', authUrl);
-        console.log('Callback scheme:', callbackScheme);
-        console.log('Redirect URI:', redirectUri);
-
-        // ✅ Call plugin with valid custom scheme
+        // Call plugin with valid custom scheme
         const result = await authenticate({
           url: authUrl,
           callbackScheme: callbackScheme
@@ -452,13 +329,136 @@ class ApiService {
         return { session: data.session, user: data.user };
 
       } catch (authError) {
-        console.error('❌ iOS Apple Sign-In failed:', authError);
+        console.error('❌ Tauri OAuth failed:', authError);
+        throw new Error(authError.message || 'Google prijava nije uspela');
+      }
+    }
+
+    // Web only: Standard Supabase OAuth flow (redirect-based)
+    console.log('🌐 Using Supabase OAuth (redirect flow for web)');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + '/auth/callback',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      }
+    });
+
+    if (error) {
+      console.error('❌ Supabase signInWithOAuth error:', error);
+      throw new Error(error.message || 'Google prijava nije uspela');
+    }
+
+    // Supabase will handle the redirect
+    return data;
+  }
+
+  async signInWithApple() {
+    console.log('🍎 signInWithApple() called');
+
+    // Detect platform
+    const isTauriApp = Boolean(window.__TAURI__);
+    const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    console.log('📍 Platform:', isIOS ? 'iOS (ASWebAuthenticationSession)' : 'Other');
+
+    // ALL Tauri platforms: Use tauri-plugin-web-auth with Supabase OAuth proxy
+    // Note: Apple Sign-In works best on iOS, but technically available on all platforms
+    if (isTauriApp) {
+      console.log('🍎 Using tauri-plugin-web-auth for Apple Sign-In');
+
+      try {
+        // Import the authenticate function from the plugin
+        const { authenticate } = await import('tauri-plugin-web-auth-api');
+
+        // Get Supabase URL
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('VITE_SUPABASE_URL not configured');
+        }
+
+        // Use custom URL scheme callback (must match app identifier)
+        const callbackScheme = 'com.nikola.norma-ai';
+        const redirectUri = `${callbackScheme}://oauth-callback`;
+
+        // Build Supabase Apple OAuth URL with custom redirect
+        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=apple&redirect_to=${encodeURIComponent(redirectUri)}`;
+
+        console.log('🍎 Opening browser for Apple OAuth via Supabase...');
+        console.log('Auth URL:', authUrl);
+        console.log('Callback scheme:', callbackScheme);
+        console.log('Redirect URI:', redirectUri);
+
+        // Call plugin with valid custom scheme
+        const result = await authenticate({
+          url: authUrl,
+          callbackScheme: callbackScheme
+        });
+
+        console.log('✅ OAuth callback received:', result.callbackUrl);
+
+        // Parse callback URL - Supabase returns tokens in hash fragment
+        const callbackUrl = result.callbackUrl;
+        console.log('Full callback URL:', callbackUrl);
+
+        // Extract tokens from URL (can be in hash or query params)
+        let accessToken, refreshToken;
+
+        // Try hash fragment first (standard Supabase response)
+        if (callbackUrl.includes('#')) {
+          const hashPart = callbackUrl.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          accessToken = hashParams.get('access_token');
+          refreshToken = hashParams.get('refresh_token');
+        }
+
+        // Fallback to query params
+        if (!accessToken) {
+          const url = new URL(callbackUrl);
+          accessToken = url.searchParams.get('access_token');
+          refreshToken = url.searchParams.get('refresh_token');
+        }
+
+        // Check for errors
+        const url = new URL(callbackUrl);
+        const error = url.searchParams.get('error') || url.searchParams.get('error_description');
+
+        if (error) {
+          throw new Error(`OAuth error: ${error}`);
+        }
+
+        if (!accessToken) {
+          throw new Error('No access token in callback URL');
+        }
+
+        console.log('📤 Setting Supabase session with tokens...');
+
+        // Set the session in Supabase
+        const { data, error: authError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (authError) {
+          console.error('❌ Failed to set Supabase session:', authError);
+          throw new Error(authError.message || 'Failed to set session');
+        }
+
+        console.log('✅ Supabase session established');
+        return { session: data.session, user: data.user };
+
+      } catch (authError) {
+        console.error('❌ Apple Sign-In failed:', authError);
         throw new Error(authError.message || 'Apple prijava nije uspela');
       }
     }
 
-    // Non-iOS platforms: Apple Sign-In is not supported
-    throw new Error('Apple Sign-In is only available on iOS devices');
+    // Non-Tauri platforms: Apple Sign-In is not supported
+    throw new Error('Apple Sign-In is only available on Tauri platforms');
   }
 
 

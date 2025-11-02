@@ -2130,13 +2130,14 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "norma-ai"
-version = "0.4.17"
+version = "0.4.18"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.3",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit",
+ "schemars 0.8.21",
  "serde",
  "serde_json",
  "tauri",
