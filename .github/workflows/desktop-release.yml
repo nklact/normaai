@@ -321,6 +321,23 @@ jobs:
             const fs = require('fs');
             const releaseId = process.env.release_id;
 
+            // Get existing assets and delete latest.json if it exists
+            const { data: assets } = await github.rest.repos.listReleaseAssets({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId
+            });
+
+            const existingLatestJson = assets.find(a => a.name === 'latest.json');
+            if (existingLatestJson) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: existingLatestJson.id
+              });
+              console.log('✓ Deleted existing latest.json');
+            }
+
             // Read the generated latest.json
             const latestJson = fs.readFileSync('latest.json');
 
