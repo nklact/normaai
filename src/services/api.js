@@ -252,51 +252,75 @@ class ApiService {
         // Import the authenticate function from the plugin
         const { authenticate } = await import('tauri-plugin-web-auth-api');
 
-        // Get Supabase URL from environment
+        // ✅ FIX: Use custom URL scheme (not HTTPS URL)
+        // This is required by iOS ASWebAuthenticationSession
+        const callbackScheme = 'com.nikola.norma-ai'; // Must match app identifier
+        const redirectUri = `${callbackScheme}://oauth-callback`;
+
+        // Get platform-specific Google Client ID
+        const clientId = isIOS
+          ? import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID
+          : import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID;
+
+        if (!clientId) {
+          throw new Error('Google OAuth Client ID not configured for mobile');
+        }
+
+        // Get Supabase URL for token exchange
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         if (!supabaseUrl) {
           throw new Error('VITE_SUPABASE_URL not configured');
         }
 
-        // Build OAuth URL for Google via Supabase
-        // Supabase will handle the OAuth flow and redirect back with tokens
-        const callbackScheme = `${supabaseUrl}/auth/v1/callback`;
-        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${window.location.origin}/auth/callback`;
+        // Build Google OAuth URL (direct to Google, not through Supabase)
+        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        authUrl.searchParams.set('client_id', clientId);
+        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('response_type', 'code');
+        authUrl.searchParams.set('scope', 'email profile openid');
+        authUrl.searchParams.set('access_type', 'offline');
+        authUrl.searchParams.set('prompt', 'consent');
 
-        console.log('🔐 Opening in-app browser for OAuth...');
-        console.log('Auth URL:', authUrl);
+        console.log('🔐 Opening native browser for OAuth...');
+        console.log('Auth URL:', authUrl.toString());
+        console.log('Callback scheme:', callbackScheme);
+        console.log('Client ID:', clientId);
 
-        // Call the plugin's authenticate function
-        // This opens ASWebAuthenticationSession (iOS) or Custom Tabs (Android)
+        // ✅ Call plugin with valid custom scheme
         const result = await authenticate({
-          url: authUrl,
-          callbackScheme: callbackScheme
+          url: authUrl.toString(),
+          callbackScheme: callbackScheme // ✅ Valid: "com.nikola.norma-ai" (not HTTPS URL)
         });
 
         console.log('✅ OAuth callback received:', result.callbackUrl);
 
-        // Parse the callback URL to extract tokens
-        const url = new URL(result.callbackUrl);
-        const accessToken = url.searchParams.get('access_token');
-        const refreshToken = url.searchParams.get('refresh_token');
-
-        if (!accessToken) {
-          throw new Error('No access token in callback URL');
-        }
-
-        // Set the session in Supabase
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        });
+        // Parse callback URL to extract authorization code
+        const callbackUrl = new URL(result.callbackUrl);
+        const authCode = callbackUrl.searchParams.get('code');
+        const error = callbackUrl.searchParams.get('error');
 
         if (error) {
-          console.error('❌ Failed to set Supabase session:', error);
-          throw new Error(error.message || 'Failed to set session');
+          throw new Error(`OAuth error: ${error}`);
+        }
+
+        if (!authCode) {
+          throw new Error('No authorization code in callback');
+        }
+
+        console.log('📤 Exchanging auth code for Supabase session...');
+
+        // Exchange Google auth code for Supabase session
+        const { data, error: authError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: authCode,
+        });
+
+        if (authError) {
+          console.error('❌ Failed to create Supabase session:', authError);
+          throw new Error(authError.message || 'Failed to authenticate with Supabase');
         }
 
         console.log('✅ Supabase session established');
-
         return { session: data.session, user: data.user };
 
       } catch (authError) {

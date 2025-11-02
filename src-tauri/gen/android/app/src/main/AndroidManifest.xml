@@ -36,6 +36,14 @@
                 
             </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->
+
+            <!-- OAuth callback for Google Sign-In (tauri-plugin-web-auth) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.nikola.norma-ai" />
+            </intent-filter>
         </activity>
 
         <provider

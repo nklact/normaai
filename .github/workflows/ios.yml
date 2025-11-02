@@ -99,6 +99,9 @@ jobs:
           # Supabase environment variables for frontend (required by @supabase/supabase-js)
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Google OAuth Client IDs for mobile authentication
+          VITE_GOOGLE_IOS_CLIENT_ID: ${{ secrets.VITE_GOOGLE_IOS_CLIENT_ID }}
+          VITE_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.VITE_GOOGLE_ANDROID_CLIENT_ID }}
         run: |
           cd src-tauri
           npm run tauri ios build -- --export-method app-store-connect --verbose
