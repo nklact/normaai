@@ -38,7 +38,12 @@ export function UpdateChecker() {
     } catch (err) {
       // Silently fail in development or if update endpoint is not configured
       // This is expected when developing locally or if GitHub releases aren't set up yet
-      console.warn('Update check failed (this is normal in development):', err.message);
+      console.warn('Update check failed (this is normal in development):', err);
+      console.warn('Error details:', {
+        message: err?.message,
+        cause: err?.cause,
+        stack: err?.stack
+      });
       // Don't set error state - just fail silently
     }
   };
