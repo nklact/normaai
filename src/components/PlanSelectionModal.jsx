@@ -183,10 +183,10 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
   if (!isOpen) return null;
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Izaberite Plan" 
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Izaberite Plan"
       type="plan-selection"
     >
       <div className="plan-selection-content">

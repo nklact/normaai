@@ -383,11 +383,14 @@ function App() {
     try {
       const status = await apiService.getUserStatus();
       setUserStatus(status);
-      
+
       // Only set authenticated if we have complete user data
       if (status && status.email) {
         setIsAuthenticated(true);
-        
+
+        // Close mobile sidebar to show main chat page
+        setIsMobileMenuOpen(false);
+
         // If user has 0 messages left after login, show plan selection modal
         if (status.messages_remaining !== null && status.messages_remaining <= 0) {
           setTimeout(() => {
@@ -395,7 +398,7 @@ function App() {
           }, 1000); // Small delay to let auth modal close first
         }
       }
-      
+
       await loadChats(); // Reload chats to get any migrated trial chats
     } catch (error) {
       console.error('Error loading user data after auth:', error);
