@@ -613,6 +613,19 @@
   flex-shrink: 0;
 }
 
+/* Apple button specific styling */
+.social-button.apple {
+  position: relative;
+  background-color: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+.social-button.apple:hover:not(:disabled) {
+  background-color: #1a1a1a;
+  border-color: #1a1a1a;
+}
+
 /* Google button specific styling */
 .social-button.google {
   position: relative;
@@ -632,6 +645,17 @@
   .social-button:hover:not(:disabled) {
     background-color: var(--bg-tertiary);
     border-color: var(--border-hover);
+  }
+
+  .social-button.apple {
+    background-color: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+  }
+
+  .social-button.apple:hover:not(:disabled) {
+    background-color: #f5f5f5;
+    border-color: #f5f5f5;
   }
 
   .social-button.google:hover:not(:disabled) {

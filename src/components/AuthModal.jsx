@@ -162,6 +162,35 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
     }
   };
 
+  const handleAppleLogin = async () => {
+    console.log('🍎 handleAppleLogin() called - button was clicked');
+    setIsLoading(true);
+    setError('');
+    try {
+      console.log('🍎 About to call apiService.signInWithApple()');
+      const result = await apiService.signInWithApple();
+      console.log('🍎 apiService.signInWithApple() returned:', result);
+
+      // For iOS apps, authentication is complete
+      // and session is returned directly from tauri-plugin-web-auth
+      if (result?.session) {
+        setSuccess('Uspešno ste se prijavili!');
+        setTimeout(() => {
+          onSuccess(result);
+          onClose();
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Apple login error:', err);
+      setError(err.message || 'Apple prijava nije uspela');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Detect if running on iOS
+  const isIOS = Boolean(window.__TAURI__) && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   const switchTab = (tab) => {
     setActiveTab(tab);
     setError('');
@@ -337,6 +366,22 @@ const AuthModal = ({ isOpen, onClose, onSuccess, initialTab = 'login', reason = 
             </div>
 
             <div className="social-buttons">
+              {/* Apple Sign-In button - iOS only (App Store requirement) */}
+              {isIOS && (
+                <button
+                  type="button"
+                  onClick={handleAppleLogin}
+                  disabled={isLoading}
+                  className="social-button apple"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="currentColor" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                  </svg>
+                  Apple
+                </button>
+              )}
+
+              {/* Google Sign-In button */}
               <button
                 type="button"
                 onClick={handleGoogleLogin}

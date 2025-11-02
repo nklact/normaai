@@ -358,6 +358,109 @@ class ApiService {
     return data;
   }
 
+  async signInWithApple() {
+    console.log('🍎 signInWithApple() called');
+
+    // Detect platform
+    const isTauriApp = Boolean(window.__TAURI__);
+    const isIOS = isTauriApp && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    console.log('📍 Platform:', isIOS ? 'iOS (ASWebAuthenticationSession)' : 'Other');
+
+    // iOS: Use tauri-plugin-web-auth with Supabase OAuth proxy
+    if (isIOS) {
+      console.log('📱 Using tauri-plugin-web-auth for iOS Apple Sign-In');
+
+      try {
+        // Import the authenticate function from the plugin
+        const { authenticate } = await import('tauri-plugin-web-auth-api');
+
+        // Get Supabase URL
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('VITE_SUPABASE_URL not configured');
+        }
+
+        // ✅ Use Supabase OAuth with custom URL scheme callback
+        const callbackScheme = 'com.nikola.norma-ai'; // Must match app identifier
+        const redirectUri = `${callbackScheme}://oauth-callback`;
+
+        // Build Supabase Apple OAuth URL with custom redirect
+        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=apple&redirect_to=${encodeURIComponent(redirectUri)}`;
+
+        console.log('🍎 Opening native browser for Apple OAuth via Supabase...');
+        console.log('Auth URL:', authUrl);
+        console.log('Callback scheme:', callbackScheme);
+        console.log('Redirect URI:', redirectUri);
+
+        // ✅ Call plugin with valid custom scheme
+        const result = await authenticate({
+          url: authUrl,
+          callbackScheme: callbackScheme
+        });
+
+        console.log('✅ OAuth callback received:', result.callbackUrl);
+
+        // Parse callback URL - Supabase returns tokens in hash fragment
+        const callbackUrl = result.callbackUrl;
+        console.log('Full callback URL:', callbackUrl);
+
+        // Extract tokens from URL (can be in hash or query params)
+        let accessToken, refreshToken;
+
+        // Try hash fragment first (standard Supabase response)
+        if (callbackUrl.includes('#')) {
+          const hashPart = callbackUrl.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          accessToken = hashParams.get('access_token');
+          refreshToken = hashParams.get('refresh_token');
+        }
+
+        // Fallback to query params
+        if (!accessToken) {
+          const url = new URL(callbackUrl);
+          accessToken = url.searchParams.get('access_token');
+          refreshToken = url.searchParams.get('refresh_token');
+        }
+
+        // Check for errors
+        const url = new URL(callbackUrl);
+        const error = url.searchParams.get('error') || url.searchParams.get('error_description');
+
+        if (error) {
+          throw new Error(`OAuth error: ${error}`);
+        }
+
+        if (!accessToken) {
+          throw new Error('No access token in callback URL');
+        }
+
+        console.log('📤 Setting Supabase session with tokens...');
+
+        // Set the session in Supabase
+        const { data, error: authError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (authError) {
+          console.error('❌ Failed to set Supabase session:', authError);
+          throw new Error(authError.message || 'Failed to set session');
+        }
+
+        console.log('✅ Supabase session established');
+        return { session: data.session, user: data.user };
+
+      } catch (authError) {
+        console.error('❌ iOS Apple Sign-In failed:', authError);
+        throw new Error(authError.message || 'Apple prijava nije uspela');
+      }
+    }
+
+    // Non-iOS platforms: Apple Sign-In is not supported
+    throw new Error('Apple Sign-In is only available on iOS devices');
+  }
+
 
   /**
    * Logout and clear session
