@@ -55,7 +55,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RkZGOTNDMjRGODM0NDUKUldSRk5QZ2tQUG4vdEM2aVI1TjJoV3ViWm5YWVdDdklkRTlCTUNIT1czTFBJaUkwNVJ5aUk1NVkK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFNDIzMTBCNDZCMkE4NUYKUldSZnFMSkdDekZDYm5DUU5nM3pacEJVbXRxbWJqdmJLZDhlY0JFUDZkanF6K244elRmT2JPaVIK",
       "endpoints": [
         "https://github.com/nklact/normaai/releases/latest/download/latest.json"
       ],
