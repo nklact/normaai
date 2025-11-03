@@ -3,6 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import Icon from './Icons';
 import { ConversationsSkeleton } from './Skeleton';
 import './Sidebar.css';
+import packageJson from '../../package.json';
 
 const Sidebar = ({
   chats,
@@ -25,6 +26,7 @@ const Sidebar = ({
   const { isDark, toggleTheme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isHelpSubmenuOpen, setIsHelpSubmenuOpen] = useState(false);
+  const [showVersion, setShowVersion] = useState(false);
   const userMenuRef = useRef(null);
 
   const formatDate = (dateString) => {
@@ -335,7 +337,14 @@ const Sidebar = ({
 
       <div className="sidebar-footer">
         <div className="app-info">
-          <h3>Norma AI</h3>
+          <h3
+            className="app-name-clickable"
+            onClick={() => setShowVersion(!showVersion)}
+            title="Kliknite da vidite verziju"
+          >
+            Norma AI
+            {showVersion && <span className="app-version">v{packageJson.version}</span>}
+          </h3>
           <p>Pravni asistent za srpsko zakonodavstvo</p>
         </div>
       </div>

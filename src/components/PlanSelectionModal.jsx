@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Icon from './Icons';
 import './PlanSelectionModal.css';
@@ -7,6 +7,13 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [billingPeriod, setBillingPeriod] = useState('monthly'); // 'monthly' or 'yearly'
+
+  // Reset billing period to monthly when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setBillingPeriod('monthly');
+    }
+  }, [isOpen]);
 
   const plans = [
     {
