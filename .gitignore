@@ -55,3 +55,8 @@ backend/target/
 backend/Cargo.lock
 src-tauri/gen/android/keystore.properties
 *.keystore
+
+# Tauri signing keys (NEVER commit these!)
+*.key
+*.key.pub
+tauri-signing.*
