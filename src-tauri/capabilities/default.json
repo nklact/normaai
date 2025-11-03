@@ -22,7 +22,6 @@
     "store:allow-load",
     "store:allow-save",
     "machine-uid:default",
-    "machine-uid:allow-get-machine-uid",
-    "oauth:default"
+    "machine-uid:allow-get-machine-uid"
   ]
 }
