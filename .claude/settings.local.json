@@ -11,7 +11,8 @@
       "WebFetch(domain:supabase.com)",
       "WebFetch(domain:v2.tauri.app)",
       "Read(//c/Users/Nikola/Downloads/**)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
