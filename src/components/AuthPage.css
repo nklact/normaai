@@ -222,7 +222,7 @@ html[data-theme="dark"] .auth-page-logo.dark-logo {
 }
 
 .auth-page-input.error {
-  border-color: var(--error-color);
+  border-color: var(--danger-color);
 }
 
 .auth-page-input:disabled {
@@ -263,7 +263,7 @@ html[data-theme="dark"] .auth-page-logo.dark-logo {
 /* Error and success messages */
 .auth-page-error {
   font-size: 13px;
-  color: var(--error-color);
+  color: var(--danger-color);
   margin-top: 4px;
 }
 

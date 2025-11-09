@@ -183,14 +183,19 @@ pub async fn link_user_handler(
     State((pool, _, _jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Extract token for session creation
+    let token = headers
+        .get("Authorization")
+        .and_then(|auth_header| auth_header.to_str().ok())
+        .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
+        .map(|t| t.to_string());
+
     // Extract Supabase auth_user_id DIRECTLY from JWT token (not from public.users)
     // We need the auth.users.id, not the public.users.id!
     let supabase_user_id = if let Some(supabase_secret) = supabase_jwt_secret.as_deref() {
-        headers
-            .get("Authorization")
-            .and_then(|auth_header| auth_header.to_str().ok())
-            .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
-            .and_then(|token| verify_supabase_token(token, supabase_secret).ok())
+        token
+            .as_ref()
+            .and_then(|t| verify_supabase_token(t, supabase_secret).ok())
             .map(|claims| Uuid::parse_str(&claims.sub).ok())
             .flatten()
     } else {
@@ -376,6 +381,39 @@ pub async fn link_user_handler(
 
         (new_user_id, 0)
     };
+
+    // Create session for this login
+    if let Some(ref token_str) = token {
+        // Extract device info from User-Agent header
+        let user_agent = headers
+            .get("User-Agent")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
+
+        let device_info = user_agent.map(|ua| crate::sessions::DeviceInfo {
+            name: Some(ua.clone()),
+            os: None,
+            browser: None,
+            app_version: None,
+        });
+
+        // Get IP address from X-Forwarded-For or X-Real-IP header (behind proxy)
+        let ip_address = headers
+            .get("X-Forwarded-For")
+            .or_else(|| headers.get("X-Real-IP"))
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.split(',').next())
+            .and_then(|s| s.trim().parse::<std::net::IpAddr>().ok());
+
+        match crate::sessions::create_or_update_session(&pool, user_id, token_str, device_info, ip_address).await {
+            Ok(session_id) => {
+                println!("✅ Session created/updated: {}", session_id);
+            }
+            Err(e) => {
+                eprintln!("⚠️ Failed to create session (non-fatal): {}", e);
+            }
+        }
+    }
 
     Ok(Json(AuthResponse {
         success: true,
@@ -1883,6 +1921,309 @@ pub async fn restore_account_handler(
         message: "Vaš nalog je uspešno vraćen.".to_string(),
         user_status,
     }))
+}
+
+// ==================== SESSION MANAGEMENT ====================
+
+#[derive(Debug, Serialize)]
+pub struct SessionResponse {
+    pub id: String,
+    pub device_name: Option<String>,
+    pub ip_address: Option<String>,
+    pub created_at: String,
+    pub last_seen_at: String,
+    pub is_current: bool,
+}
+
+/// Get all active sessions for the authenticated user
+pub async fn get_sessions_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Vec<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Niste autorizovani".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    // Get current token hash to mark the current session
+    let current_token = headers
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| crate::sessions::hash_token(t));
+
+    let sessions = crate::sessions::get_user_sessions(&pool, user_id)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to get sessions: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška dobijanja sesija".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    let response: Vec<SessionResponse> = sessions
+        .into_iter()
+        .map(|s| {
+            let device_name = s.device_info
+                .as_ref()
+                .and_then(|d| d.get("name"))
+                .and_then(|n| n.as_str())
+                .map(|s| s.to_string());
+
+            SessionResponse {
+                id: s.id.to_string(),
+                device_name,
+                ip_address: s.ip_address.map(|ip| ip.to_string()),
+                created_at: s.created_at.to_rfc3339(),
+                last_seen_at: s.last_seen_at.to_rfc3339(),
+                is_current: current_token.as_ref() == Some(&crate::sessions::hash_token(&s.id.to_string())),
+            }
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeSessionRequest {
+    pub session_id: String,
+}
+
+/// Revoke a specific session
+pub async fn revoke_session_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<RevokeSessionRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Niste autorizovani".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    let session_id = Uuid::parse_str(&payload.session_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_SESSION_ID".to_string(),
+                message: "Neispravan ID sesije".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    let revoked = crate::sessions::revoke_session(&pool, session_id, user_id)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to revoke session: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška revokacije sesije".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    if !revoked {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "SESSION_NOT_FOUND".to_string(),
+                message: "Sesija nije pronađena".to_string(),
+                details: None,
+            }),
+        ));
+    }
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "Sesija uspešno uklonjena"
+    })))
+}
+
+/// Revoke all sessions except the current one
+pub async fn revoke_all_sessions_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Niste autorizovani".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    let current_token = headers
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "));
+
+    let revoked_count = crate::sessions::revoke_all_sessions(&pool, user_id, current_token)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to revoke all sessions: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška revokacije sesija".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Uklonjeno {} sesija", revoked_count),
+        "count": revoked_count
+    })))
+}
+
+// ==================== PASSWORD CHANGE ====================
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ChangePasswordRequest {
+    #[validate(length(min = 8, message = "Lozinka mora imati najmanje 8 karaktera"))]
+    #[validate(custom = "validate_password_strength")]
+    pub new_password: String,
+}
+
+/// Change user password (requires Supabase auth)
+pub async fn change_password_handler(
+    State((pool, _, _jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<ChangePasswordRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    // Validate password requirements
+    payload.validate().map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "VALIDATION_ERROR".to_string(),
+                message: format!("Validacija neuspešna: {}", e),
+                details: Some(serde_json::json!({"details": e.to_string()})),
+            }),
+        )
+    })?;
+
+    // Extract user ID from Supabase token
+    let (user_id, token) = if let Some(supabase_secret) = supabase_jwt_secret.as_deref() {
+        let token_str = headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    Json(ErrorResponse {
+                        error: "NO_TOKEN".to_string(),
+                        message: "Token nije pronađen".to_string(),
+                        details: None,
+                    }),
+                )
+            })?;
+
+        let claims = verify_supabase_token(token_str, supabase_secret).map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "INVALID_TOKEN".to_string(),
+                    message: "Neispravan token".to_string(),
+                    details: None,
+                }),
+            )
+        })?;
+
+        let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "INVALID_USER_ID".to_string(),
+                    message: "Neispravan korisnički ID".to_string(),
+                    details: None,
+                }),
+            )
+        })?;
+
+        (user_id, token_str.to_string())
+    } else {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "SUPABASE_NOT_CONFIGURED".to_string(),
+                message: "Supabase nije konfigurisan".to_string(),
+                details: None,
+            }),
+        ));
+    };
+
+    // NOTE: Password is changed via Supabase frontend SDK
+    // Backend only handles revoking other sessions for security
+    // This prevents stolen sessions from continuing to work after password change
+
+    // Revoke all sessions except current one
+    let revoked_count = crate::sessions::revoke_all_sessions(&pool, user_id, Some(&token))
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to revoke sessions on password change: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "SESSION_REVOKE_ERROR".to_string(),
+                    message: "Greška revokacije sesija".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "Lozinka uspešno promenjena. Druge sesije su uklonjene.",
+        "revoked_sessions": revoked_count
+    })))
 }
 
 // ==================== EMAIL FUNCTIONS ====================

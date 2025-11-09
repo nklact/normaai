@@ -133,6 +133,21 @@ select {
   font-family: inherit;
 }
 
+/* Common form feedback styles - used across all components */
+.form-error {
+  color: var(--danger-color);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  margin-bottom: 16px;
+}
+
+.form-success {
+  color: var(--success-color);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  margin-bottom: 16px;
+}
+
 .app {
   display: flex;
   height: 100%; /* Inherit from #root - clean hierarchy */

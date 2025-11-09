@@ -106,7 +106,7 @@
 
 /* Confirmation Dialog Styles */
 .modal-content.confirm {
-  max-width: 420px;
+  max-width: 500px;
 }
 
 .modal-content.confirm .modal-title {
@@ -243,18 +243,6 @@
 
 .form-input.error:focus {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-}
-
-.form-error {
-  color: var(--danger-color);
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
-.form-success {
-  color: var(--success-color);
-  font-size: var(--text-xs);
-  font-weight: 500;
 }
 
 .auth-submit {

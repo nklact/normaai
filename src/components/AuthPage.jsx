@@ -94,8 +94,8 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
       });
 
       if (!response.ok) {
-        console.log('❌ Failed to check email, defaulting to registration');
-        return false;
+        console.log('❌ Failed to check email, returning null to show both options');
+        return null; // null = show both login and register buttons
       }
 
       const data = await response.json();
@@ -113,8 +113,8 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
       return false;
     } catch (err) {
       console.error('Error checking email:', err);
-      // On error, default to registration for better UX
-      return false;
+      // On network error, return null to show both options
+      return null;
     } finally {
       setIsCheckingEmail(false);
     }
@@ -133,12 +133,23 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
 
     // Check if email exists
     const exists = await checkEmailExists(formData.email);
-    setEmailChecked(true);
 
-    if (exists) {
+    if (exists === true) {
+      // User exists - show login form
+      setEmailChecked(true);
       setAuthMode('login');
-    } else {
+    } else if (exists === false) {
+      // User doesn't exist - show registration form
+      setEmailChecked(true);
       setAuthMode('register');
+    } else {
+      // Network error (exists === null) - show error but stay in email mode
+      setFieldErrors({
+        email: 'Ne mogu da se povežem sa serverom. Proverite internet konekciju i pokušajte ponovo.'
+      });
+      // Don't proceed - keep user in email mode to retry
+      setEmailChecked(false);
+      // authMode stays as 'email'
     }
   };
 
@@ -230,7 +241,18 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
 
     } catch (err) {
       console.error('Auth error:', err);
-      setError(err.message || 'Došlo je do greške. Pokušajte ponovo.');
+
+      // Special handling for "user already exists" error during registration
+      if (authMode === 'register' && err.message && err.message.includes('već registrovan')) {
+        setError('Email je već registrovan. ');
+        // Switch to login mode automatically
+        setTimeout(() => {
+          setAuthMode('login');
+          setError('');
+        }, 2000);
+      } else {
+        setError(err.message || 'Došlo je do greške. Pokušajte ponovo.');
+      }
     } finally {
       setIsLoading(false);
     }

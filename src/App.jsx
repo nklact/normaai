@@ -9,6 +9,7 @@ import ErrorDialog from "./components/ErrorDialog";
 import AuthPage from "./components/AuthPage";
 import PlanSelectionModal from "./components/PlanSelectionModal";
 import SubscriptionManagementModal from "./components/SubscriptionManagementModal";
+import SettingsModal from "./components/SettingsModal";
 import UpdateChecker from "./components/UpdateChecker";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import apiService from "./services/api";
@@ -36,6 +37,9 @@ function App() {
 
   // Subscription management state
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
+
+  // Settings modal state
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // Modal states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -153,19 +157,21 @@ function App() {
       const hasToken = await apiService.isAuthenticated();
       console.log('🔍 DEBUG: isAuthenticated returned:', hasToken);
 
-      // Load user status
+      // Optimistic authentication: if we have a local token, show the app immediately
+      // Backend validation happens in the background
+      if (hasToken) {
+        console.log('✅ Local session found - showing app optimistically');
+        setIsAuthenticated(true);
+      }
+
+      // Load user status from backend (validates token and gets account info)
       const status = await apiService.getUserStatus();
       console.log('🔍 DEBUG: getUserStatus() returned:', JSON.stringify(status, null, 2));
       setUserStatus(status);
 
-      // Only set authenticated to true if we have both token AND user data with email
-      const authenticated = hasToken && status && status.email;
-      setIsAuthenticated(authenticated);
-
       console.log('🔍 DEBUG: Auth check complete');
       console.log('🔍 DEBUG: - hasToken:', hasToken);
       console.log('🔍 DEBUG: - status:', status);
-      console.log('🔍 DEBUG: - authenticated:', authenticated);
 
       // Handle stale sessions: if user has a token but no backend account, sign them out
       if (hasToken && !status.is_authenticated) {
@@ -173,14 +179,20 @@ function App() {
         try {
           await apiService.logout();
           console.log('🔓 Stale session cleared');
+          setIsAuthenticated(false);
+          setUserStatus(null);
+          setAuthModalOpen(true);
+          setAuthInitialTab('register');
         } catch (logoutError) {
           console.error('❌ Error clearing stale session:', logoutError);
         }
+        return;
       }
 
       // Require login: if user is not authenticated, show auth modal
       if (!status.is_authenticated) {
         console.log('🔍 User not authenticated - requiring login/registration');
+        setIsAuthenticated(false);
         setAuthModalOpen(true);
         setAuthInitialTab('register'); // Default to registration tab for new users
       } else {
@@ -776,6 +788,8 @@ function App() {
             onLogout={handleLogout}
             // Plan management props
             onOpenPlanSelection={handleOpenPlanSelection}
+            onOpenSubscriptionManagement={() => setSubscriptionModalOpen(true)}
+            onOpenSettings={() => setSettingsModalOpen(true)}
           />
           <div className="main-content">
             <LawSelector
@@ -832,6 +846,15 @@ function App() {
             onClose={handleCloseSubscriptionModal}
             userStatus={userStatus}
             onSubscriptionChange={handleSubscriptionChange}
+          />
+
+          <SettingsModal
+            isOpen={settingsModalOpen}
+            onClose={() => setSettingsModalOpen(false)}
+            userStatus={userStatus}
+            onOpenPlanSelection={handleOpenPlanSelection}
+            onOpenSubscriptionManagement={() => setSubscriptionModalOpen(true)}
+            onAccountDeleted={handleAuthSuccess}
           />
         </div>
       )}

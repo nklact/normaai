@@ -23,9 +23,25 @@ pub async fn verify_user_from_headers_async(
         .and_then(|auth_header| auth_header.to_str().ok())
         .and_then(|auth_str| auth_str.strip_prefix("Bearer "))?;
 
-    verify_any_token(token, jwt_secret, supabase_jwt_secret, pool)
+    // Verify the JWT token first
+    let user_id = verify_any_token(token, jwt_secret, supabase_jwt_secret, pool)
         .await
-        .ok()
+        .ok()?;
+
+    // Validate session is not revoked
+    match crate::sessions::validate_session(pool, token).await {
+        Ok(true) => Some(user_id),
+        Ok(false) => {
+            eprintln!("⚠️ Session revoked for user {}", user_id);
+            None
+        }
+        Err(e) => {
+            eprintln!("⚠️ Session validation error (allowing request): {}", e);
+            // On error, allow the request to proceed (graceful degradation)
+            // This prevents session table issues from breaking authentication
+            Some(user_id)
+        }
+    }
 }
 
 /// Get user by ID from optimized schema
@@ -210,7 +226,24 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // 3. Existing core tables
+    // 3. User sessions table for device tracking and concurrent login limits
+    sqlx::query(r#"
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            session_token_hash VARCHAR(64) NOT NULL UNIQUE,
+            device_info JSONB,
+            ip_address INET,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            revoked BOOLEAN NOT NULL DEFAULT false
+        )
+    "#)
+    .execute(pool)
+    .await?;
+
+    // 4. Existing core tables
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS chats (
@@ -385,6 +418,22 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     )
     .execute(pool)
     .await?;
+
+    // User sessions indexes
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)")
+        .execute(pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON user_sessions(session_token_hash)")
+        .execute(pool)
+        .await?;
+    // Partial index for active sessions (without NOW() which is non-immutable)
+    // We filter expires_at > NOW() in queries instead of in the index predicate
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sessions_active ON user_sessions(user_id, last_seen_at DESC) WHERE revoked = false")
+        .execute(pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sessions_cleanup ON user_sessions(expires_at) WHERE revoked = false")
+        .execute(pool)
+        .await?;
 
     // Core table indexes
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)")

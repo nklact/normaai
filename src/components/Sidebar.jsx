@@ -25,7 +25,9 @@ const Sidebar = ({
   onRegister,
   onLogout,
   // Plan management props
-  onOpenPlanSelection
+  onOpenPlanSelection,
+  onOpenSubscriptionManagement,
+  onOpenSettings
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -125,8 +127,8 @@ const Sidebar = ({
 
   const handleManagePlan = () => {
     setIsUserMenuOpen(false);
-    if (onOpenPlanSelection) {
-      onOpenPlanSelection();
+    if (onOpenSubscriptionManagement) {
+      onOpenSubscriptionManagement();
     }
   };
 
@@ -252,23 +254,6 @@ const Sidebar = ({
         </div>
       )}
 
-      {/* Email Verification Banner */}
-      {isAuthenticated && userStatus && !userStatus.email_verified && (
-        <div className="email-verification-banner">
-          <div className="verification-content">
-            <div className="verification-title">Verifikujte email</div>
-            <div className="verification-text">Proverite email za link za verifikaciju.</div>
-          </div>
-          <button
-            className="resend-verification-btn"
-            onClick={handleResendVerificationEmail}
-            disabled={isResendingVerification}
-          >
-            {isResendingVerification ? 'Šalje se...' : 'Pošalji ponovo'}
-          </button>
-        </div>
-      )}
-
       <div className={`chat-list-container ${!isAuthenticated ? 'restricted' : ''}`}>
         <div className={`chat-list ${!isAuthenticated ? 'blurred' : ''}`}>
           {isLoadingChats ? (
@@ -353,12 +338,18 @@ const Sidebar = ({
               ) : (
                 <button className="dropdown-menu-item manage-item" onClick={handleManagePlan}>
                   <span className="menu-icon">
-                    <Icon name="settings" size={14} />
+                    <Icon name="creditCard" size={14} />
                   </span>
-                  Izmenite Plan
+                  Upravljaj pretplatom
                 </button>
               )}
-              <div className="dropdown-menu-item help-item" 
+              <button className="dropdown-menu-item settings-item" onClick={() => { setIsUserMenuOpen(false); onOpenSettings?.(); }}>
+                <span className="menu-icon">
+                  <Icon name="settings" size={14} />
+                </span>
+                Podešavanja
+              </button>
+              <div className="dropdown-menu-item help-item"
                    onMouseEnter={() => setIsHelpSubmenuOpen(true)}
                    onMouseLeave={() => setIsHelpSubmenuOpen(false)}
                    onClick={toggleHelpSubmenu}>
@@ -373,17 +364,17 @@ const Sidebar = ({
                 </span>
                 {isHelpSubmenuOpen && (
                   <div className="help-submenu-popup">
-                    <a 
-                      href="https://normaai.rs/uslovi.html" 
-                      target="_blank" 
+                    <a
+                      href="https://normaai.rs/uslovi.html"
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="submenu-link"
                     >
                       Uslovi korišćenja
                     </a>
-                    <a 
-                      href="https://normaai.rs/privatnost.html" 
-                      target="_blank" 
+                    <a
+                      href="https://normaai.rs/privatnost.html"
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="submenu-link"
                     >
@@ -392,17 +383,22 @@ const Sidebar = ({
                   </div>
                 )}
               </div>
-              <button className="dropdown-menu-item danger-item" onClick={handleDeleteAccountClick}>
-                <span className="menu-icon">
-                  <Icon name="trash2" size={14} />
-                </span>
-                Obriši nalog
-              </button>
-              <button className="dropdown-menu-item logout-item" onClick={handleLogoutClick}>
-                <span className="menu-icon">
-                  <Icon name="logOut" size={14} />
-                </span>
-                Odjavite se
+            </div>
+          )}
+
+          {/* Email Verification Banner */}
+          {!userStatus.email_verified && (
+            <div className="email-verification-banner">
+              <div className="verification-content">
+                <div className="verification-title">Verifikujte email adresu</div>
+                <div className="verification-text">Proverite inbox za link za verifikaciju.</div>
+              </div>
+              <button
+                className="resend-verification-btn"
+                onClick={handleResendVerificationEmail}
+                disabled={isResendingVerification}
+              >
+                {isResendingVerification ? 'Šalje se...' : 'Pošalji ponovo'}
               </button>
             </div>
           )}

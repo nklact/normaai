@@ -7,14 +7,15 @@ mod legal_parser;
 mod laws;
 mod contracts;
 mod cleanup;
+mod sessions;
 
 use axum::{
     routing::{get, post, put, delete},
-    Router, 
+    Router,
     extract::DefaultBodyLimit,
-    http::Method,
+    http::{Method, HeaderValue},
 };
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use sqlx::postgres::PgPoolOptions;
 use std::{env, sync::Arc};
@@ -79,11 +80,25 @@ async fn main() {
     });
     println!("🗑️  Started user deletion cleanup job (runs daily)");
 
-    // Configure CORS
+    // Configure CORS - allow requests from web app, Tauri desktop, and mobile apps
+    // Note: When using allow_credentials(true), we CANNOT use Any for headers
+    // We must specify allowed headers explicitly (CORS security requirement)
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin([
+            "http://localhost:1420".parse::<HeaderValue>().unwrap(), // Tauri dev
+            "https://tauri.localhost".parse::<HeaderValue>().unwrap(), // Tauri production
+            "tauri://localhost".parse::<HeaderValue>().unwrap(), // Tauri custom protocol
+            "https://chat.normaai.rs".parse::<HeaderValue>().unwrap(), // Production web
+            "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Vite dev
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(), // Alternative dev port
+        ])
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-        .allow_headers(Any);
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::ACCEPT,
+        ])
+        .allow_credentials(true); // Required for Authorization header support
 
     // Complete auth and subscription routes
     let auth_routes = Router::new()
@@ -97,6 +112,12 @@ async fn main() {
         .route("/api/auth/verify-email", post(simple_auth::verify_email_handler))
         .route("/api/auth/logout", post(simple_auth::logout_handler))
         .route("/api/auth/user-status", get(simple_auth::user_status_handler))
+        // Session management endpoints
+        .route("/api/auth/sessions", get(simple_auth::get_sessions_handler))
+        .route("/api/auth/sessions/revoke", post(simple_auth::revoke_session_handler))
+        .route("/api/auth/sessions/revoke-all", post(simple_auth::revoke_all_sessions_handler))
+        // Password change endpoint
+        .route("/api/auth/change-password", post(simple_auth::change_password_handler))
         // Account deletion endpoints
         .route("/api/auth/delete-account", post(simple_auth::request_delete_account_handler))
         .route("/api/auth/restore-account", post(simple_auth::restore_account_handler))
