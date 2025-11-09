@@ -55,8 +55,7 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
       'professional': 'Professional',
       'individual': 'Individual',
       'team': 'Team',
-      'trial_registered': 'Probni period',
-      'trial_unregistered': 'Probni period'
+      'trial_registered': 'Probni period'
     };
     return typeMap[accountType] || accountType;
   };

@@ -12,7 +12,9 @@
       "WebFetch(domain:v2.tauri.app)",
       "Read(//c/Users/Nikola/Downloads/**)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(if exist \"C:\\Users\\Nikola\\Documents\\Norma AI\\src\\utils\\persistentStorage.js\" rm \"C:\\Users\\Nikola\\Documents\\Norma AI\\src\\utils\\persistentStorage.js\")",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []

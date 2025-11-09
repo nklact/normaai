@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::simple_auth::{verify_token, verify_any_token};
+use crate::simple_auth::verify_any_token;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -9,33 +9,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-type AppState = (PgPool, String, String); // (pool, api_key, jwt_secret)
+type AppState = (PgPool, String, String, Option<String>); // (pool, api_key, jwt_secret, supabase_jwt_secret)
 
-// Helper function to extract user information from headers
-// Note: This is synchronous and only extracts the token - actual verification happens async
-pub fn extract_user_info(
-    headers: &axum::http::HeaderMap,
-    jwt_secret: &str,
-) -> (Option<Uuid>, Option<String>) {
-    // First try to get device fingerprint
-    let device_fingerprint = headers
-        .get("X-Device-Fingerprint")
-        .and_then(|header| header.to_str().ok())
-        .map(|s| s.to_string());
-
-    // Then try to get user ID from JWT token (custom tokens only for backwards compatibility)
-    // For Supabase tokens, use verify_user_from_headers_async instead
-    let user_id = headers
-        .get("Authorization")
-        .and_then(|auth_header| auth_header.to_str().ok())
-        .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
-        .and_then(|token| verify_token(token, jwt_secret).ok())
-        .and_then(|claims| Uuid::parse_str(&claims.sub).ok());
-
-    (user_id, device_fingerprint)
-}
-
-// Async version that supports both custom and Supabase tokens
+// Async function that supports both custom JWT and Supabase tokens
 pub async fn verify_user_from_headers_async(
     headers: &axum::http::HeaderMap,
     jwt_secret: &str,
@@ -52,29 +28,53 @@ pub async fn verify_user_from_headers_async(
         .ok()
 }
 
-/// Get user by ID or device fingerprint from optimized schema
+/// Get user by ID from optimized schema
 pub async fn get_user(
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
 ) -> Result<Option<crate::models::User>, sqlx::Error> {
     if let Some(user_id) = user_id {
-        // Get by user ID for registered users
-        sqlx::query_as::<_, crate::models::User>(
+        // First try to get active user
+        let user = sqlx::query_as::<_, crate::models::User>(
             "SELECT * FROM users WHERE id = $1 AND account_status = 'active'",
         )
         .bind(user_id)
         .fetch_optional(pool)
-        .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Get by device fingerprint - only device trial records when logged out
-        sqlx::query_as::<_, crate::models::User>(
-            "SELECT * FROM users WHERE device_fingerprint = $1 AND account_type = 'trial_unregistered' AND account_status = 'active'"
+        .await?;
+
+        // If user found and active, return it
+        if user.is_some() {
+            return Ok(user);
+        }
+
+        // Check if user is deleted but within grace period
+        let deleted_user = sqlx::query_as::<_, crate::models::User>(
+            "SELECT * FROM users WHERE id = $1 AND account_status = 'deleted'",
         )
-        .bind(device_fp)
+        .bind(user_id)
         .fetch_optional(pool)
-        .await
+        .await?;
+
+        if let Some(user) = deleted_user {
+            if let Some(deleted_at) = user.deleted_at {
+                let grace_period_ends = deleted_at + chrono::Duration::days(30);
+                if chrono::Utc::now() < grace_period_ends {
+                    // Auto-restore user within grace period
+                    restore_user(user_id, pool).await?;
+                    // Fetch the restored user
+                    return sqlx::query_as::<_, crate::models::User>(
+                        "SELECT * FROM users WHERE id = $1",
+                    )
+                    .bind(user_id)
+                    .fetch_optional(pool)
+                    .await;
+                }
+            }
+        }
+
+        Ok(None)
     } else {
+        // No user_id provided - user not authenticated
         Ok(None)
     }
 }
@@ -82,38 +82,27 @@ pub async fn get_user(
 /// Get simplified user status - single query instead of multiple JOINs
 pub async fn get_user_status_optimized(
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
 ) -> Result<UserStatusResponse, String> {
-    let user = get_user(user_id, device_fingerprint.clone(), pool)
+    let user = get_user(user_id, pool)
         .await
         .map_err(|e| format!("Failed to get user: {}", e))?;
 
     if let Some(user) = user {
-        // When logged out (no user_id), always treat as trial regardless of account type
-        // When logged in, use actual account type
-        let (access_type, messages_remaining) = if user_id.is_none() {
-            // Logged out - always show trial status based on device fingerprint
-            ("trial", user.trial_messages_remaining)
-        } else {
-            // Logged in - use actual account status
-            let access_type = match user.account_type.as_str() {
-                "trial_unregistered" => "trial",
-                "trial_registered" => "trial",
-                "individual" => "individual",
-                "professional" => "professional",
-                "team" => "team",
-                "premium" => "professional", // Migrate existing premium users to professional
-                _ => "trial",
-            };
+        // User is authenticated - use actual account type
+        let access_type = match user.account_type.as_str() {
+            "trial_registered" => "trial",
+            "individual" => "individual",
+            "professional" => "professional",
+            "team" => "team",
+            "premium" => "professional", // Migrate existing premium users to professional
+            _ => "trial",
+        };
 
-            let messages_remaining = match user.account_type.as_str() {
-                "professional" | "team" | "premium" => None, // Unlimited
-                "individual" => user.trial_messages_remaining, // 20 per month
-                _ => user.trial_messages_remaining,          // Trial messages
-            };
-
-            (access_type, messages_remaining)
+        let messages_remaining = match user.account_type.as_str() {
+            "professional" | "team" | "premium" => None, // Unlimited
+            "individual" => user.trial_messages_remaining, // 20 per month
+            _ => user.trial_messages_remaining,          // Trial messages (5 for new registrations)
         };
 
         // Count total messages sent by this user (for UI hints)
@@ -128,80 +117,41 @@ pub async fn get_user_status_optimized(
             .fetch_one(pool)
             .await
             .unwrap_or(0) as i32
-        } else if let Some(ref device_fp) = device_fingerprint {
-            // Trial user: count by device_fingerprint
-            sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM messages m
-                 JOIN chats c ON m.chat_id = c.id
-                 WHERE c.device_fingerprint = $1 AND m.role = 'user'"
-            )
-            .bind(device_fp)
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0) as i32
         } else {
             0
         };
 
         Ok(UserStatusResponse {
-            is_authenticated: user_id.is_some() && user.is_registered(), // Only authenticated if logged in
-            user_id: user_id, // Only expose user_id if logged in
-            email: if user_id.is_some() && !user.email.contains("@trial.local") {
-                Some(user.email)
-            } else {
-                None
-            },
+            is_authenticated: user_id.is_some() && user.is_registered(),
+            user_id,
+            email: Some(user.email.clone()),
+            email_verified: user.email_verified,
+            oauth_provider: user.oauth_provider.clone(),
             access_type: access_type.to_string(),
-            account_type: if user_id.is_some() {
-                user.account_type.clone()
-            } else {
-                "trial_unregistered".to_string()
-            },
-            trial_expires_at: None, // No time-based expiration anymore
-            premium_expires_at: if user_id.is_some() {
-                user.premium_expires_at
-            } else {
-                None
-            },
-            subscription_expires_at: if user_id.is_some() {
-                user.premium_expires_at
-            } else {
-                None
-            },
+            account_type: user.account_type.clone(),
+            trial_expires_at: None, // No time-based expiration
+            premium_expires_at: user.premium_expires_at,
+            subscription_expires_at: user.premium_expires_at,
             messages_used_today: 0, // Not used anymore
             messages_remaining,
             total_messages_sent,
-            // Include subscription fields only when logged in
-            subscription_type: if user_id.is_some() {
-                user.subscription_type
-            } else {
-                None
-            },
-            subscription_started_at: if user_id.is_some() {
-                user.subscription_started_at
-            } else {
-                None
-            },
-            next_billing_date: if user_id.is_some() {
-                user.next_billing_date
-            } else {
-                None
-            },
-            subscription_status: if user_id.is_some() {
-                user.subscription_status
-            } else {
-                None
-            },
+            // Include subscription fields
+            subscription_type: user.subscription_type,
+            subscription_started_at: user.subscription_started_at,
+            next_billing_date: user.next_billing_date,
+            subscription_status: user.subscription_status,
         })
     } else {
-        // No user found - they need to start trial first
+        // No user found - user needs to register/login
         Ok(UserStatusResponse {
             is_authenticated: false,
             user_id: None,
             email: None,
-            access_type: "trial".to_string(), // Frontend expects this
-            account_type: "trial_unregistered".to_string(), // Internal use
-            trial_expires_at: None,           // No time-based expiration
+            email_verified: false,
+            oauth_provider: None,
+            access_type: "trial".to_string(),
+            account_type: "trial_registered".to_string(), // Will be set on registration
+            trial_expires_at: None,
             premium_expires_at: None,
             subscription_expires_at: None, // Alias for frontend
             messages_used_today: 0,        // Not used
@@ -219,16 +169,20 @@ pub async fn get_user_status_optimized(
 pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Create optimized tables for new schema
 
-    // 1. Optimized Users table (combines users + device_fingerprints + subscriptions)
+    // 1. Optimized Users table (combines users + subscriptions)
     sqlx::query(r#"
         CREATE TABLE IF NOT EXISTS users (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            auth_user_id UUID UNIQUE,
             email VARCHAR(255) UNIQUE NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
             email_verified BOOLEAN DEFAULT false,
-            account_type VARCHAR(20) DEFAULT 'trial_registered' CHECK (account_type IN ('trial_unregistered', 'trial_registered', 'individual', 'professional', 'team', 'premium')),
+            name VARCHAR(255),
+            oauth_provider VARCHAR(50),
+            oauth_profile_picture_url TEXT,
+            account_type VARCHAR(20) DEFAULT 'trial_registered' CHECK (account_type IN ('trial_registered', 'individual', 'professional', 'team', 'premium')),
             account_status VARCHAR(20) DEFAULT 'active' CHECK (account_status IN ('active', 'suspended', 'deleted')),
-            device_fingerprint VARCHAR(255),
+            deleted_at TIMESTAMP WITH TIME ZONE,
             trial_started_at TIMESTAMP WITH TIME ZONE,
             trial_expires_at TIMESTAMP WITH TIME ZONE,
             trial_messages_remaining INTEGER DEFAULT 5,
@@ -256,106 +210,13 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // 3. Usage logs table (replaces usage_tracking + ip_tracking)
-    sqlx::query(r#"
-        CREATE TABLE IF NOT EXISTS usage_logs (
-            id BIGSERIAL PRIMARY KEY,
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            device_fingerprint VARCHAR(255),
-            ip_address INET,
-            activity_type VARCHAR(20) DEFAULT 'message' CHECK (activity_type IN ('message', 'login', 'trial_start')),
-            date DATE DEFAULT CURRENT_DATE,
-            count INTEGER DEFAULT 1,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            UNIQUE (user_id, device_fingerprint, ip_address, activity_type, date)
-        )
-    "#)
-    .execute(pool)
-    .await?;
-
-    // 4. IP Trial Limits table (simplified version of usage_logs for IP limiting only)
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS ip_trial_limits (
-            id BIGSERIAL PRIMARY KEY,
-            ip_address INET NOT NULL,
-            date DATE DEFAULT CURRENT_DATE,
-            count INTEGER DEFAULT 1,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            UNIQUE (ip_address)
-        )
-    "#,
-    )
-    .execute(pool)
-    .await?;
-
-    // Migration: Update unique constraint to lifetime (ip_address only, not per date)
-    // Drop old constraint if it exists
-    sqlx::query(
-        r#"
-        DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1 FROM pg_constraint
-                WHERE conname = 'ip_trial_limits_ip_address_date_key'
-            ) THEN
-                ALTER TABLE ip_trial_limits DROP CONSTRAINT ip_trial_limits_ip_address_date_key;
-            END IF;
-        END $$;
-    "#,
-    )
-    .execute(pool)
-    .await
-    .ok(); // Ignore errors if constraint doesn't exist
-
-    // Add new unique constraint if not exists
-    sqlx::query(
-        r#"
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint
-                WHERE conname = 'ip_trial_limits_ip_address_key'
-            ) THEN
-                ALTER TABLE ip_trial_limits ADD CONSTRAINT ip_trial_limits_ip_address_key UNIQUE (ip_address);
-            END IF;
-        END $$;
-    "#,
-    )
-    .execute(pool)
-    .await
-    .ok(); // Ignore errors if constraint already exists
-
-    // Migration: Move existing trial data from usage_logs to ip_trial_limits
-    // Aggregate all trials per IP (lifetime, not per day)
-    sqlx::query(
-        r#"
-        INSERT INTO ip_trial_limits (ip_address, count, created_at)
-        SELECT ip_address, SUM(count) as total_count, MIN(created_at) as first_trial
-        FROM usage_logs
-        WHERE activity_type = 'trial_start' AND ip_address IS NOT NULL
-        GROUP BY ip_address
-        ON CONFLICT (ip_address) DO NOTHING
-    "#,
-    )
-    .execute(pool)
-    .await
-    .unwrap_or_else(|e| {
-        println!(
-            "Migration note: Could not migrate existing data (table may not exist): {}",
-            e
-        );
-        Default::default()
-    });
-
-    // 5. Existing core tables (unchanged)
+    // 3. Existing core tables
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS chats (
             id BIGSERIAL PRIMARY KEY,
             title TEXT NOT NULL,
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            device_fingerprint VARCHAR(255),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
@@ -435,6 +296,41 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Add auth_user_id column for Supabase integration (links to auth.users)
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_user_id UUID UNIQUE",
+    )
+    .execute(pool)
+    .await?;
+
+    // Add name column for user profiles (from OAuth or manual entry)
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)",
+    )
+    .execute(pool)
+    .await?;
+
+    // Add oauth_provider column to track OAuth login method
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(50)",
+    )
+    .execute(pool)
+    .await?;
+
+    // Add oauth_profile_picture_url column for user avatars
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_profile_picture_url TEXT",
+    )
+    .execute(pool)
+    .await?;
+
+    // Add deleted_at column for soft delete functionality
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE",
+    )
+    .execute(pool)
+    .await?;
+
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS law_cache (
@@ -453,9 +349,6 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Create optimized indexes
     // Users table indexes
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
-        .execute(pool)
-        .await?;
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_users_device_fingerprint ON users(device_fingerprint) WHERE device_fingerprint IS NOT NULL")
         .execute(pool)
         .await?;
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_users_account_type ON users(account_type)")
@@ -493,14 +386,6 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // IP trial limits indexes
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_ip_trial_limits_ip ON ip_trial_limits(ip_address)")
-        .execute(pool)
-        .await?;
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_ip_trial_limits_date ON ip_trial_limits(date)")
-        .execute(pool)
-        .await?;
-
     // Core table indexes
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)")
         .execute(pool)
@@ -514,51 +399,30 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id)")
         .execute(pool)
         .await?;
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_chats_device_fingerprint ON chats(device_fingerprint)",
-    )
-    .execute(pool)
-    .await?;
 
     Ok(())
 }
 
 #[axum::debug_handler]
 pub async fn create_chat_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateChatRequest>,
 ) -> Result<ResponseJson<CreateChatResponse>, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
-
-    // Use the device_fingerprint from headers, not from request body for security
-    let actual_device_fingerprint = device_fingerprint.or(request.device_fingerprint);
-
-    let result = if let Some(user_id) = user_id {
-        // Registered user: associate chat with user_id
-        sqlx::query_scalar::<_, i64>(
-            "INSERT INTO chats (title, user_id, device_fingerprint) VALUES ($1, $2, $3) RETURNING id"
-        )
-        .bind(request.title)
-        .bind(user_id)
-        .bind(actual_device_fingerprint)
-        .fetch_one(&pool)
+    // Verify user with Supabase token support
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool)
         .await
-    } else if let Some(device_fp) = actual_device_fingerprint {
-        // Trial user: associate with device fingerprint only
-        sqlx::query_scalar::<_, i64>(
-            "INSERT INTO chats (title, device_fingerprint) VALUES ($1, $2) RETURNING id",
-        )
-        .bind(request.title)
-        .bind(device_fp)
-        .fetch_one(&pool)
-        .await
-    } else {
-        // No valid authentication: reject
-        return Err(StatusCode::UNAUTHORIZED);
-    };
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let result = result.map_err(|e| {
+    // Registered user: associate chat with user_id
+    let result = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO chats (title, user_id) VALUES ($1, $2) RETURNING id"
+    )
+    .bind(request.title)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to create chat: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -568,40 +432,25 @@ pub async fn create_chat_handler(
 
 #[axum::debug_handler]
 pub async fn get_chats_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<ResponseJson<Vec<Chat>>, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
-
-    // Build query with proper filtering for user isolation
-    let chats = if let Some(user_id) = user_id {
-        // Registered user: get their chats only
-        sqlx::query_as::<_, Chat>(
-            "SELECT id, title, user_id, device_fingerprint, created_at, updated_at 
-             FROM chats 
-             WHERE user_id = $1 
-             ORDER BY updated_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(&pool)
+    // Verify user with Supabase token support
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool)
         .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user: get chats for this device only
-        sqlx::query_as::<_, Chat>(
-            "SELECT id, title, user_id, device_fingerprint, created_at, updated_at 
-             FROM chats 
-             WHERE user_id IS NULL AND device_fingerprint = $1 
-             ORDER BY updated_at DESC",
-        )
-        .bind(device_fp)
-        .fetch_all(&pool)
-        .await
-    } else {
-        // No valid authentication: return empty
-        Ok(Vec::new())
-    };
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let chats = chats.map_err(|e| {
+    // Get chats by user_id
+    let chats = sqlx::query_as::<_, Chat>(
+        "SELECT id, title, user_id, created_at, updated_at
+         FROM chats
+         WHERE user_id = $1
+         ORDER BY updated_at DESC"
+    )
+    .bind(user_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to fetch chats: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -611,37 +460,24 @@ pub async fn get_chats_handler(
 
 #[axum::debug_handler]
 pub async fn get_messages_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Path(chat_id): Path<i64>,
 ) -> Result<ResponseJson<Vec<Message>>, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
-
-    // First, verify the user owns this chat
-    let chat_exists = if let Some(user_id) = user_id {
-        // Registered user: check if chat belongs to them
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)",
-        )
-        .bind(chat_id)
-        .bind(user_id)
-        .fetch_one(&pool)
+    // Verify user with Supabase token support
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool)
         .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user: check if chat belongs to their device
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id IS NULL AND device_fingerprint = $2)"
-        )
-        .bind(chat_id)
-        .bind(device_fp)
-        .fetch_one(&pool)
-        .await
-    } else {
-        // No valid authentication
-        Ok(false)
-    };
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let chat_exists = chat_exists.map_err(|e| {
+    // Verify the user owns this chat
+    let chat_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)"
+    )
+    .bind(chat_id)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to verify chat ownership: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -667,37 +503,24 @@ pub async fn get_messages_handler(
 
 #[axum::debug_handler]
 pub async fn add_message_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<AddMessageRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool).await;
 
-    // First, verify the user owns this chat (same logic as get_messages_handler)
-    let chat_exists = if let Some(user_id) = user_id {
-        // Registered user: check if chat belongs to them
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)",
-        )
-        .bind(request.chat_id)
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user: check if chat belongs to their device
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id IS NULL AND device_fingerprint = $2)"
-        )
-        .bind(request.chat_id)
-        .bind(device_fp)
-        .fetch_one(&pool)
-        .await
-    } else {
-        // No valid authentication
-        Ok(false)
-    };
+    // Only authenticated users can add messages
+    let user_id = user_id.ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let chat_exists = chat_exists.map_err(|e| {
+    // Verify the user owns this chat
+    let chat_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)"
+    )
+    .bind(request.chat_id)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to verify chat ownership for message: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -734,38 +557,25 @@ pub async fn add_message_handler(
 
 #[axum::debug_handler]
 pub async fn delete_chat_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Path(chat_id): Path<i64>,
 ) -> Result<StatusCode, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
+    // Verify user with Supabase token support
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Delete the chat only if the user owns it (CASCADE will automatically delete associated messages)
-    let rows_affected = if let Some(user_id) = user_id {
-        // Registered user: delete chats owned by this user_id (includes migrated trial chats)
-        sqlx::query("DELETE FROM chats WHERE id = $1 AND user_id = $2")
-            .bind(chat_id)
-            .bind(user_id)
-            .execute(&pool)
-            .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user: delete only chat belonging to their device (non-migrated)
-        sqlx::query(
-            "DELETE FROM chats WHERE id = $1 AND user_id IS NULL AND device_fingerprint = $2",
-        )
+    let result = sqlx::query("DELETE FROM chats WHERE id = $1 AND user_id = $2")
         .bind(chat_id)
-        .bind(device_fp)
+        .bind(user_id)
         .execute(&pool)
         .await
-    } else {
-        // No valid authentication: reject
-        return Err(StatusCode::UNAUTHORIZED);
-    };
-
-    let result = rows_affected.map_err(|e| {
-        eprintln!("Failed to delete chat: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+        .map_err(|e| {
+            eprintln!("Failed to delete chat: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if result.rows_affected() == 0 {
         // Chat not found or user doesn't own it
@@ -787,43 +597,31 @@ pub struct UpdateChatTitleResponse {
 }
 
 pub async fn update_chat_title_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Path(chat_id): Path<i64>,
     Json(request): Json<UpdateChatTitleRequest>,
 ) -> Result<ResponseJson<UpdateChatTitleResponse>, StatusCode> {
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
+    // Verify user with Supabase token support
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Update the chat title only if the user owns it
-    let rows_affected = if let Some(user_id) = user_id {
-        // Registered user: update chats owned by this user_id
-        sqlx::query(
-            "UPDATE chats SET title = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
-        )
-        .bind(&request.title)
-        .bind(chat_id)
-        .bind(user_id)
-        .execute(&pool)
-        .await
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user: update only chat belonging to their device
-        sqlx::query("UPDATE chats SET title = $1, updated_at = NOW() WHERE id = $2 AND user_id IS NULL AND device_fingerprint = $3")
-            .bind(&request.title)
-            .bind(chat_id)
-            .bind(device_fp)
-            .execute(&pool)
-            .await
-    } else {
-        // No valid authentication: reject
-        return Err(StatusCode::UNAUTHORIZED);
-    };
-
-    let result = rows_affected.map_err(|e| {
+    let rows_affected = sqlx::query(
+        "UPDATE chats SET title = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3"
+    )
+    .bind(&request.title)
+    .bind(chat_id)
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to update chat title: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    if result.rows_affected() == 0 {
+    if rows_affected.rows_affected() == 0 {
         // Chat not found or user doesn't own it
         return Err(StatusCode::NOT_FOUND);
     }
@@ -835,7 +633,7 @@ pub async fn update_chat_title_handler(
 }
 
 pub async fn get_cached_law_handler(
-    State((pool, _, _)): State<AppState>,
+    State((pool, _, _, _)): State<AppState>,
     Json(request): Json<GetCachedLawRequest>,
 ) -> Result<ResponseJson<Option<LawCache>>, StatusCode> {
     let cached_law = sqlx::query_as::<_, LawCache>(
@@ -874,53 +672,26 @@ pub async fn cache_law(
 
 // ==================== USAGE TRACKING FUNCTIONS ====================
 
-/// Decrement trial message count for trial users
+/// Decrement trial message count for users with limited messages
 pub async fn decrement_trial_message(
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
 ) -> Result<(), String> {
-    if let Some(user_id) = user_id {
-        // For registered users, decrement their trial_messages_remaining
-        let rows_affected = sqlx::query(
-            "UPDATE users SET trial_messages_remaining = trial_messages_remaining - 1, updated_at = NOW()
-             WHERE id = $1 AND account_type NOT IN ('professional', 'team', 'premium') AND trial_messages_remaining > 0"
-        )
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to decrement user trial messages: {}", e))?
-        .rows_affected();
+    let user_id = user_id.ok_or("User not authenticated".to_string())?;
 
-        if rows_affected == 0 {
-            return Err("No messages remaining or user has unlimited plan".to_string());
-        }
-    } else if let Some(device_fp) = device_fingerprint {
-        // For unregistered trial users, find or create their record and decrement
-        let existing_user = get_user(None, Some(device_fp.clone()), pool)
-            .await
-            .map_err(|e| format!("Failed to get user: {}", e))?;
+    // For registered users, decrement their trial_messages_remaining
+    let rows_affected = sqlx::query(
+        "UPDATE users SET trial_messages_remaining = trial_messages_remaining - 1, updated_at = NOW()
+         WHERE id = $1 AND account_type NOT IN ('professional', 'team', 'premium') AND trial_messages_remaining > 0"
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to decrement user trial messages: {}", e))?
+    .rows_affected();
 
-        if let Some(user) = existing_user {
-            // User exists, decrement their trial messages (regardless of account type when using device fingerprint)
-            let rows_affected = sqlx::query(
-                "UPDATE users SET trial_messages_remaining = trial_messages_remaining - 1, updated_at = NOW() 
-                 WHERE id = $1 AND trial_messages_remaining > 0"
-            )
-            .bind(user.id)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Failed to decrement trial messages: {}", e))?
-            .rows_affected();
-
-            if rows_affected == 0 {
-                return Err("No trial messages remaining".to_string());
-            }
-        } else {
-            return Err("No user found for device fingerprint".to_string());
-        }
-    } else {
-        return Err("No user ID or device fingerprint provided".to_string());
+    if rows_affected == 0 {
+        return Err("No messages remaining or user has unlimited plan".to_string());
     }
 
     Ok(())
@@ -929,13 +700,14 @@ pub async fn decrement_trial_message(
 /// Check if user can send a message (has trial messages remaining or is premium)
 pub async fn can_send_message(
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
 ) -> Result<bool, String> {
+    let user_id = user_id.ok_or("User not authenticated".to_string())?;
+
     // Auto-reset Individual plan users' monthly limits if needed
     auto_reset_individual_monthly_limits(pool).await?;
 
-    let user = get_user(user_id, device_fingerprint, pool)
+    let user = get_user(Some(user_id), pool)
         .await
         .map_err(|e| format!("Failed to get user: {}", e))?;
 
@@ -951,7 +723,7 @@ pub async fn can_send_message(
         // Trial and Individual users must have messages remaining
         Ok(user.trial_messages_remaining.unwrap_or(0) > 0)
     } else {
-        // No user found - they need to start trial first
+        // No user found
         Ok(false)
     }
 }
@@ -1006,14 +778,13 @@ pub fn estimate_llm_cost(input_chars: usize, output_chars: usize) -> f64 {
 /// Track LLM usage cost for a user, automatically handling monthly resets
 pub async fn track_llm_cost(
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     estimated_cost_usd: f64,
     pool: &PgPool,
 ) -> Result<(), String> {
     let current_month = chrono::Utc::now().format("%Y-%m").to_string();
 
     if let Some(user_id) = user_id {
-        // Registered user - track by user_id
+        // Track by user_id
         sqlx::query(
             r#"
             UPDATE users
@@ -1032,26 +803,6 @@ pub async fn track_llm_cost(
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to track LLM cost for user: {}", e))?;
-    } else if let Some(device_fp) = device_fingerprint {
-        // Trial user - track by device fingerprint
-        sqlx::query(
-            r#"
-            UPDATE users
-            SET monthly_llm_cost_usd = CASE
-                WHEN current_cost_month = $2 THEN monthly_llm_cost_usd + $3
-                ELSE $3
-            END,
-            current_cost_month = $2,
-            updated_at = NOW()
-            WHERE device_fingerprint = $1
-            "#,
-        )
-        .bind(&device_fp)
-        .bind(&current_month)
-        .bind(estimated_cost_usd)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to track LLM cost for device: {}", e))?;
     }
 
     Ok(())
@@ -1060,15 +811,15 @@ pub async fn track_llm_cost(
 /// Submit or update feedback for a message
 #[axum::debug_handler]
 pub async fn submit_message_feedback_handler(
-    State((pool, _, jwt_secret)): State<AppState>,
+    State((pool, _, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: axum::http::HeaderMap,
     Path(message_id): Path<i64>,
     Json(request): Json<crate::models::SubmitFeedbackRequest>,
 ) -> Result<ResponseJson<crate::models::SubmitFeedbackResponse>, StatusCode> {
     println!("🔍 BACKEND: Feedback request received for message_id={}, feedback_type={}", message_id, request.feedback_type);
 
-    let (user_id, device_fingerprint) = extract_user_info(&headers, &jwt_secret);
-    println!("🔍 BACKEND: User info - user_id={:?}, device_fingerprint={:?}", user_id, device_fingerprint.as_ref().map(|s| &s[..8]));
+    let user_id = verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool).await;
+    println!("🔍 BACKEND: User info - user_id={:?}", user_id);
 
     // Validate feedback_type
     if request.feedback_type != "positive" && request.feedback_type != "negative" {
@@ -1095,27 +846,16 @@ pub async fn submit_message_feedback_handler(
     };
 
     // Verify user owns this chat
-    let chat_exists = if let Some(user_id) = user_id {
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)",
-        )
-        .bind(chat_id)
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-    } else if let Some(device_fp) = device_fingerprint {
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id IS NULL AND device_fingerprint = $2)"
-        )
-        .bind(chat_id)
-        .bind(device_fp)
-        .fetch_one(&pool)
-        .await
-    } else {
-        Ok(false)
-    };
+    let user_id = user_id.ok_or(StatusCode::UNAUTHORIZED)?;
 
-    let chat_exists = chat_exists.map_err(|e| {
+    let chat_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM chats WHERE id = $1 AND user_id = $2)",
+    )
+    .bind(chat_id)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| {
         eprintln!("Failed to verify chat ownership: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -1157,4 +897,196 @@ pub async fn submit_message_feedback_handler(
         message: "Feedback submitted successfully".to_string(),
         updated,
     }))
+}
+
+// ============================================================================
+// Account Deletion Functions
+// ============================================================================
+
+/// Mark user account as deleted (soft delete)
+pub async fn soft_delete_user(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<chrono::DateTime<chrono::Utc>, sqlx::Error> {
+    let deleted_at = chrono::Utc::now();
+
+    sqlx::query(
+        r#"
+        UPDATE users
+        SET account_status = 'deleted',
+            deleted_at = $1,
+            updated_at = $1
+        WHERE id = $2
+        "#
+    )
+    .bind(deleted_at)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(deleted_at)
+}
+
+/// Restore user account from soft delete (within grace period)
+pub async fn restore_user(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<User, sqlx::Error> {
+    let user = sqlx::query_as::<_, User>(
+        r#"
+        UPDATE users
+        SET account_status = 'active',
+            deleted_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+          AND account_status = 'deleted'
+          AND deleted_at IS NOT NULL
+          AND deleted_at > NOW() - INTERVAL '30 days'
+        RETURNING *
+        "#
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(user)
+}
+
+/// Check if user is within 30-day grace period
+pub async fn is_within_grace_period(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<bool, sqlx::Error> {
+    let result: Option<(Option<chrono::DateTime<chrono::Utc>>,)> = sqlx::query_as(
+        r#"
+        SELECT deleted_at
+        FROM users
+        WHERE id = $1
+          AND account_status = 'deleted'
+          AND deleted_at IS NOT NULL
+        "#
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((Some(deleted_at),)) = result {
+        let grace_period_ends = deleted_at + chrono::Duration::days(30);
+        return Ok(chrono::Utc::now() < grace_period_ends);
+    }
+
+    Ok(false)
+}
+
+/// Permanently delete user and all associated data
+pub async fn permanently_delete_user(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<(), sqlx::Error> {
+    // Get auth_user_id to delete from Supabase auth.users (which cascades to users table)
+    let auth_user_id: Option<(Option<Uuid>,)> = sqlx::query_as(
+        "SELECT auth_user_id FROM users WHERE id = $1"
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((Some(auth_id),)) = auth_user_id {
+        // Delete from Supabase auth.users (cascades to users table via FK)
+        sqlx::query("DELETE FROM auth.users WHERE id = $1")
+            .bind(auth_id)
+            .execute(pool)
+            .await?;
+    } else {
+        // Fallback: Direct deletion if no auth_user_id
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
+/// Get users whose grace period has expired (for cleanup job)
+pub async fn get_expired_deleted_users(pool: &PgPool) -> Result<Vec<Uuid>, sqlx::Error> {
+    let records: Vec<(Uuid,)> = sqlx::query_as(
+        r#"
+        SELECT id
+        FROM users
+        WHERE account_status = 'deleted'
+          AND deleted_at IS NOT NULL
+          AND deleted_at < NOW() - INTERVAL '30 days'
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(records.into_iter().map(|(id,)| id).collect())
+}
+
+/// Check if user is team admin (has team_id and other users in the same team)
+pub async fn is_team_admin(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<bool, sqlx::Error> {
+    // A user is considered team admin if they have account_type = 'team' and team_id is set
+    // This is a simplified check - you may need to adjust based on your team structure
+    let result: Option<(String, Option<Uuid>)> = sqlx::query_as(
+        r#"
+        SELECT account_type, team_id
+        FROM users
+        WHERE id = $1
+        "#
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some((account_type, Some(team_id))) = result {
+        // Check if user is team type and has team_id
+        if account_type == "team" {
+            // Check if there are other users in the team
+            let team_members_count: (i64,) = sqlx::query_as(
+                r#"
+                SELECT COUNT(*)
+                FROM users
+                WHERE team_id = $1 AND id != $2 AND account_status = 'active'
+                "#
+            )
+            .bind(team_id)
+            .bind(user_id)
+            .fetch_one(pool)
+            .await?;
+
+            return Ok(team_members_count.0 > 0);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Cancel user's subscription (used during account deletion)
+/// Sets subscription to 'cancelled' but keeps access until billing period ends
+pub async fn cancel_subscription(
+    user_id: Uuid,
+    pool: &PgPool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE users
+        SET premium_expires_at = next_billing_date,
+            subscription_type = NULL,
+            subscription_started_at = NULL,
+            next_billing_date = NULL,
+            subscription_status = 'cancelled',
+            updated_at = NOW()
+        WHERE id = $1
+        "#
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

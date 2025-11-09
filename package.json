@@ -1,7 +1,7 @@
 {
   "name": "norma-ai",
   "private": true,
-  "version": "0.4.20",
+  "version": "0.4.21",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,8 +12,8 @@
     "generate-ico-icns": "node scripts/generate-ico-icns.js"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@fabianlars/tauri-plugin-oauth": "^2.0.0",
-    "@skipperndt/plugin-machine-uid": "^0.1.2",
     "@supabase/supabase-js": "^2.49.1",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-opener": "^2.5.2",
@@ -21,7 +21,6 @@
     "@tauri-apps/plugin-store": "^2.4.1",
     "@tauri-apps/plugin-updater": "^2.9.0",
     "date-fns": "^2.30.0",
-    "js-sha256": "^0.9.0",
     "mammoth": "^1.10.0",
     "pdfjs-dist": "^5.4.54",
     "react": "^19.1.0",

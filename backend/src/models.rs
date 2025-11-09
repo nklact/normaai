@@ -1,14 +1,12 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
-use validator::{Validate, ValidationError};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Chat {
     pub id: i64,
     pub title: String,
     pub user_id: Option<Uuid>,
-    pub device_fingerprint: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -42,7 +40,6 @@ pub struct LawCache {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateChatRequest {
     pub title: String,
-    pub device_fingerprint: Option<String>, // For trial users
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,7 +91,6 @@ pub struct QuestionRequest {
     pub law_name: Option<String>, // Optional - will be auto-detected if not provided
     pub law_url: Option<String>, // Optional - will be auto-detected if not provided
     pub chat_id: i64,
-    pub device_fingerprint: Option<String>, // For trial users
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,33 +118,6 @@ pub struct SerbianLaw {
 }
 
 // Authentication Models
-#[derive(Debug, Deserialize, Validate)]
-pub struct RegisterRequest {
-    #[validate(email(message = "Neispravna email adresa"))]
-    #[validate(length(max = 254, message = "Email adresa je predugačka"))]
-    pub email: String,
-    
-    #[validate(length(min = 8, max = 128, message = "Lozinka mora imati između 8 i 128 karaktera"))]
-    #[validate(custom = "validate_password_strength")]
-    pub password: String,
-    
-    #[validate(length(min = 10, max = 500, message = "Neispravna identifikacija uređaja"))]
-    pub device_fingerprint: String,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct LoginRequest {
-    #[validate(email(message = "Neispravna email adresa"))]
-    #[validate(length(max = 254, message = "Email adresa je predugačka"))]
-    pub email: String,
-    
-    #[validate(length(min = 1, max = 128, message = "Lozinka je obavezna"))]
-    pub password: String,
-    
-    #[validate(length(min = 10, max = 500, message = "Neispravna identifikacija uređaja"))]
-    pub device_fingerprint: String,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthResponse {
     pub success: bool,
@@ -167,7 +136,7 @@ pub struct ErrorResponse {
     pub details: Option<serde_json::Value>,
 }
 
-// Optimized User Model (replaces users + device_fingerprints + subscriptions)
+// Optimized User Model (combines users + subscriptions)
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct User {
     pub id: Uuid,
@@ -176,11 +145,11 @@ pub struct User {
     pub password_hash: Option<String>, // Nullable for social login users
     pub email_verified: bool,
     pub name: Option<String>, // User's full name (from social login or registration)
-    pub oauth_provider: Option<String>, // 'google', 'facebook', 'apple', NULL for email/password
+    pub oauth_provider: Option<String>, // 'google', 'apple', NULL for email/password
     pub oauth_profile_picture_url: Option<String>, // Avatar URL from OAuth provider
-    pub account_type: String, // 'trial_unregistered', 'trial_registered', 'individual', 'professional', 'team', 'premium'
+    pub account_type: String, // 'trial_registered', 'individual', 'professional', 'team', 'premium'
     pub account_status: String, // 'active', 'suspended', 'deleted'
-    pub device_fingerprint: Option<String>,
+    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>, // When account was marked for deletion (soft delete)
     pub team_id: Option<uuid::Uuid>,
     pub trial_started_at: Option<chrono::DateTime<chrono::Utc>>,
     pub trial_expires_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -268,25 +237,17 @@ impl AuthenticationToken {
     }
 }
 
-// IP Trial Limits Model (tracks trial starts per IP address)
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct IpTrialLimit {
-    pub id: i64,
-    pub ip_address: ipnetwork::IpNetwork, // Use proper IP type for PostgreSQL INET
-    pub date: chrono::NaiveDate,
-    pub count: i32,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserStatusResponse {
     pub is_authenticated: bool,
     pub user_id: Option<Uuid>,
     pub email: Option<String>,
-    pub access_type: String, // "trial", "registered_trial", "premium" - for frontend compatibility
-    pub account_type: String, // "trial_unregistered", "trial_registered", "premium" - internal use
+    pub email_verified: bool, // Email verification status
+    pub oauth_provider: Option<String>, // 'google', 'apple', NULL for email/password
+    pub access_type: String, // "trial", "individual", "professional", "team", "premium" - for frontend compatibility
+    pub account_type: String, // "trial_registered", "individual", "professional", "team", "premium" - internal use
     pub trial_expires_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub premium_expires_at: Option<chrono::DateTime<chrono::Utc>>, 
+    pub premium_expires_at: Option<chrono::DateTime<chrono::Utc>>,
     pub subscription_expires_at: Option<chrono::DateTime<chrono::Utc>>, // Alias for frontend compatibility
     pub messages_used_today: i32, // Deprecated, always 0
     pub messages_remaining: Option<i32>, // None for premium (unlimited)
@@ -311,15 +272,32 @@ pub struct PasswordResetResponse {
     pub email: Option<String>, // Added for EmailJS integration
 }
 
-// Password validation function
-pub fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
-    let has_uppercase = password.chars().any(char::is_uppercase);
-    let has_lowercase = password.chars().any(char::is_lowercase);
-    let has_digit = password.chars().any(char::is_numeric);
-    let has_special = password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
-    
-    if !(has_uppercase && has_lowercase && has_digit && has_special) {
-        return Err(ValidationError::new("Lozinka mora sadržavati velika i mala slova, broj i specijalni karakter"));
-    }
-    Ok(())
+// Email Verification Response
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationEmailResponse {
+    pub success: bool,
+    pub message: String,
+    pub email: Option<String>, // Email to send verification to
+    pub verification_token: Option<String>, // Token for verification link
 }
+
+// Account Deletion Models
+#[derive(Debug, Deserialize)]
+pub struct DeleteAccountRequest {
+    pub confirmation: bool, // Must be true
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteAccountResponse {
+    pub success: bool,
+    pub message: String,
+    pub grace_period_ends: Option<String>, // ISO 8601 date
+}
+
+#[derive(Debug, Serialize)]
+pub struct RestoreAccountResponse {
+    pub success: bool,
+    pub message: String,
+    pub user_status: UserStatusResponse,
+}
+

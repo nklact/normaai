@@ -155,8 +155,15 @@
   color: white;
 }
 
-.confirm-btn.delete:hover {
+.confirm-btn.delete:hover:not(:disabled) {
   background-color: #b91c1c;
+}
+
+.confirm-btn.delete:disabled {
+  background-color: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Authentication Modal Styles */
@@ -509,6 +516,14 @@
   background-color: var(--primary-hover);
 }
 
+/* Success Message Styles */
+.success-message {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
 /* Auth Reason Message */
 .auth-reason-message {
   display: flex;
@@ -696,6 +711,77 @@
 }
 
 .password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Delete Account Warning Styles */
+.delete-warning {
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.delete-warning p {
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.delete-warning ul {
+  margin: 12px 0;
+  padding-left: 24px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.delete-warning li {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.grace-period-notice {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(234, 179, 8, 0.3);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.grace-period-notice strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+}
+
+.modal-close:hover:not(:disabled) {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.modal-close:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

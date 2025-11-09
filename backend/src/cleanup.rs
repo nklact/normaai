@@ -1,0 +1,43 @@
+use sqlx::PgPool;
+use std::sync::Arc;
+use tokio::time::{interval, Duration};
+use tracing::{error, info};
+use crate::database::{get_expired_deleted_users, permanently_delete_user};
+
+/// Background job to permanently delete users after 30-day grace period
+/// Runs once per day at startup time
+pub async fn start_cleanup_job(pool: Arc<PgPool>) {
+    let mut interval = interval(Duration::from_secs(86400)); // 24 hours = 86400 seconds
+
+    loop {
+        interval.tick().await;
+
+        info!("🗑️  Running user deletion cleanup job");
+
+        match get_expired_deleted_users(&pool).await {
+            Ok(user_ids) => {
+                if user_ids.is_empty() {
+                    info!("✅ No users to permanently delete");
+                } else {
+                    info!("📋 Found {} user(s) to permanently delete", user_ids.len());
+
+                    for user_id in user_ids {
+                        match permanently_delete_user(user_id, &pool).await {
+                            Ok(_) => {
+                                info!("✅ Successfully permanently deleted user: {}", user_id);
+                                // TODO: Send confirmation email (if needed)
+                                // TODO: Log to audit trail
+                            }
+                            Err(e) => {
+                                error!("❌ Failed to permanently delete user {}: {}", user_id, e);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("❌ Failed to fetch expired deleted users: {}", e);
+            }
+        }
+    }
+}

@@ -6,7 +6,7 @@ import LawSelector from "./components/LawSelector";
 import AnnouncementBar from "./components/AnnouncementBar";
 import ConfirmDialog from "./components/ConfirmDialog";
 import ErrorDialog from "./components/ErrorDialog";
-import AuthModal from "./components/AuthModal";
+import AuthPage from "./components/AuthPage";
 import PlanSelectionModal from "./components/PlanSelectionModal";
 import SubscriptionManagementModal from "./components/SubscriptionManagementModal";
 import UpdateChecker from "./components/UpdateChecker";
@@ -36,32 +36,37 @@ function App() {
 
   // Subscription management state
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
-  
+
   // Modal states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  
+
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
   // Prevent duplicate initial chat creation from React StrictMode
   const hasAttemptedInitialChatCreation = useRef(false);
 
   useEffect(() => {
-    console.log('🔍 DEBUG: App useEffect starting - parallel initializeAuth and loadChats');
-    // Run in parallel for faster loading
-    Promise.all([
-      initializeAuth(),
-      loadChats()
-    ]).catch(error => {
+    console.log('🔍 DEBUG: App useEffect starting - initializing auth');
+    // Initialize auth first, then load chats only if authenticated
+    initializeAuth().catch(error => {
       // Catch any unhandled errors to prevent blank screen
       console.error('❌ CRITICAL: App initialization failed:', error);
       // Continue with app even if initialization partially fails
       // This ensures the UI still renders even if auth/chats fail to load
     });
   }, []);
+
+  // Load chats only when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('🔍 DEBUG: User authenticated - loading chats');
+      loadChats();
+    }
+  }, [isAuthenticated]);
 
   // Detect Tauri iOS app for platform-specific styling
   useEffect(() => {
@@ -114,13 +119,14 @@ function App() {
       // Check for OAuth callback code in URL (Web platform only)
       // For Tauri apps, authentication is handled by tauri-plugin-google-auth
       if (!window.__TAURI__) {
+        // OAuth callback (for Google Sign-In on web)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
 
         if (code) {
           console.log('🔐 Web OAuth callback detected, exchanging code for session...');
 
-          // Exchange PKCE code for session
+          // Exchange PKCE code for session (OAuth only, not email verification)
           const { data, error } = await apiService.supabase.auth.exchangeCodeForSession(code);
 
           if (error) {
@@ -129,6 +135,12 @@ function App() {
             setErrorDialogOpen(true);
           } else {
             console.log('✅ OAuth session obtained successfully');
+
+            // Link OAuth user to backend
+            if (data.session) {
+              await apiService.linkOAuthUser(data.session);
+            }
+
             setAuthModalOpen(false);
           }
 
@@ -150,69 +162,45 @@ function App() {
       const authenticated = hasToken && status && status.email;
       setIsAuthenticated(authenticated);
 
-      // If no user status found, initialize trial
-      console.log('🔍 DEBUG: Checking if trial creation needed');
-      console.log('🔍 DEBUG: - status exists:', !!status);
-      console.log('🔍 DEBUG: - status.email:', status?.email);
-      console.log('🔍 DEBUG: - status.access_type:', status?.access_type);
-      console.log('🔍 DEBUG: - status.messages_remaining:', status?.messages_remaining);
-      console.log('🔍 DEBUG: - status.user_id:', status?.user_id);
-      console.log('🔍 DEBUG: - status.account_type:', status?.account_type);
-      
-      if (!status || (!status.email && status.user_id === null)) {
-        console.log('🔍 DEBUG: No user status found, starting trial');
-        try {
-          const trialResult = await apiService.startTrial();
-          console.log('🔍 DEBUG: Trial started:', trialResult);
-          const newStatus = await apiService.getUserStatus();
-          setUserStatus(newStatus);
-        } catch (trialError) {
-          console.error('Error starting trial:', trialError);
-          console.error('Error details:', {
-            message: trialError.message,
-            stack: trialError.stack
-          });
+      console.log('🔍 DEBUG: Auth check complete');
+      console.log('🔍 DEBUG: - hasToken:', hasToken);
+      console.log('🔍 DEBUG: - status:', status);
+      console.log('🔍 DEBUG: - authenticated:', authenticated);
 
-          // Check if error is IP limit exceeded
-          const errorMsg = trialError.message || '';
-          if (errorMsg.includes('429') || errorMsg.includes('IP_LIMIT_EXCEEDED')) {
-            console.log('🔍 DEBUG: IP limit exceeded, showing auth modal');
-            setAuthModalReason('ip_limit_exceeded');
-            setAuthModalOpen(true);
-          }
+      // Handle stale sessions: if user has a token but no backend account, sign them out
+      if (hasToken && !status.is_authenticated) {
+        console.log('⚠️ Stale session detected (token exists but no backend user) - clearing session');
+        try {
+          await apiService.logout();
+          console.log('🔓 Stale session cleared');
+        } catch (logoutError) {
+          console.error('❌ Error clearing stale session:', logoutError);
         }
+      }
+
+      // Require login: if user is not authenticated, show auth modal
+      if (!status.is_authenticated) {
+        console.log('🔍 User not authenticated - requiring login/registration');
+        setAuthModalOpen(true);
+        setAuthInitialTab('register'); // Default to registration tab for new users
       } else {
-        console.log('🔍 DEBUG: User status exists, skipping trial creation');
+        console.log('✅ User authenticated');
       }
     } catch (error) {
-      console.error('Error initializing auth:', error);
-      
+      console.error('❌ Error initializing auth:', error);
+
       // Check if it's a session expiration error
       if (error.message === 'Session expired. Please log in again.') {
-        console.log('Session expired during initialization, clearing auth state');
+        console.log('🔓 Session expired during initialization, clearing auth state');
         setIsAuthenticated(false);
         setUserStatus(null);
         setAuthModalOpen(true);
         return;
       }
-      
-      // If getUserStatus fails, try to start trial as fallback
-      try {
-        console.log('🔍 DEBUG: getUserStatus failed, trying to start trial as fallback');
-        const trialResult = await apiService.startTrial();
-        const newStatus = await apiService.getUserStatus();
-        setUserStatus(newStatus);
-      } catch (trialError) {
-        console.error('Error starting fallback trial:', trialError);
 
-        // Check if error is IP limit exceeded
-        const errorMsg = trialError.message || '';
-        if (errorMsg.includes('429') || errorMsg.includes('IP_LIMIT_EXCEEDED')) {
-          console.log('🔍 DEBUG: IP limit exceeded, showing auth modal');
-          setAuthModalReason('ip_limit_exceeded');
-          setAuthModalOpen(true);
-        }
-      }
+      // For other errors, just log - don't try to start trial automatically
+      // User can still use the app, trial will be created when needed
+      console.error('⚠️ Auth initialization error (non-fatal):', error.message);
     }
   };
 
@@ -384,6 +372,9 @@ function App() {
 
   // Authentication handlers
   const handleAuthSuccess = async (result) => {
+    // Close mobile sidebar immediately to show main chat page
+    setIsMobileMenuOpen(false);
+
     // Reload user status and chats
     try {
       const status = await apiService.getUserStatus();
@@ -392,9 +383,6 @@ function App() {
       // Only set authenticated if we have complete user data
       if (status && status.email) {
         setIsAuthenticated(true);
-
-        // Close mobile sidebar to show main chat page
-        setIsMobileMenuOpen(false);
 
         // If user has 0 messages left after login, show plan selection modal
         if (status.messages_remaining !== null && status.messages_remaining <= 0) {
@@ -426,11 +414,12 @@ function App() {
       setIsAuthenticated(false);
       setUserStatus(null);
       setChats([]);
+
+      // Show auth modal after logout (user must login to continue)
+      setAuthModalOpen(true);
+      setAuthInitialTab('login'); // Default to login tab for returning users
       setCurrentChatId(null);
       setMessages([]);
-      
-      // Restart trial for the device
-      await initializeAuth();
     } catch (error) {
       console.error('Error during logout:', error);
     }
@@ -753,99 +742,99 @@ function App() {
   return (
     <ThemeProvider>
       <UpdateChecker />
-      <div className="app">
-        {/* Mobile Overlay */}
-        <div
-          className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`}
-          onClick={closeMobileMenu}
-        />
-        
-        <Sidebar
-          chats={chats}
-          currentChatId={currentChatId}
-          onChatSelect={setCurrentChatId}
-          onNewChat={createNewChat}
-          onDeleteChat={handleDeleteChat}
-          isMobileMenuOpen={isMobileMenuOpen}
-          onCloseMobileMenu={closeMobileMenu}
-          isLoadingChats={isLoadingChats}
-          // Authentication props
-          isAuthenticated={isAuthenticated}
-          userStatus={userStatus}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-          onLogout={handleLogout}
-          // Plan management props
-          onOpenPlanSelection={handleOpenPlanSelection}
-        />
-        <div className="main-content">
-          <LawSelector
-            onToggleMobileMenu={toggleMobileMenu}
-            isAuthenticated={isAuthenticated}
-            onLogin={handleLogin}
-            onRegister={handleRegister}
-          />
-          <AnnouncementBar />
-          <ChatArea
-            messages={messages}
-            onSendMessage={sendMessage}
-            onRegenerateResponse={regenerateResponse}
-            isLoading={isLoading}
-            isLoadingMessages={isLoadingMessages}
-            currentChatId={currentChatId}
-            userStatus={userStatus}
-            onOpenPlanSelection={handleOpenPlanSelection}
-            onOpenAuthModal={() => setAuthModalOpen(true)}
-            isAuthenticated={isAuthenticated}
-          />
-        </div>
-        
-        {/* Modals */}
-        <ConfirmDialog
-          isOpen={deleteConfirmOpen}
-          onClose={() => setDeleteConfirmOpen(false)}
-          onConfirm={confirmDeleteChat}
-          title="Obriši konverzaciju"
-          message="Da li ste sigurni da želite da obrišete ovu konverzaciju? Ova radnja se ne može poništiti."
-          confirmText="Obriši"
-          cancelText="Otkaži"
-          type="delete"
-        />
-        
-        <ErrorDialog
-          isOpen={errorDialogOpen}
-          onClose={() => setErrorDialogOpen(false)}
-          title="Greška"
-          message={errorMessage}
-          buttonText="U redu"
-        />
 
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => {
-            setAuthModalOpen(false);
-            setAuthModalReason(null); // Clear reason when closing
-          }}
+      {/* Show AuthPage if not authenticated - blocks main app from loading */}
+      {!isAuthenticated ? (
+        <AuthPage
           onSuccess={handleAuthSuccess}
           initialTab={authInitialTab}
           reason={authModalReason}
         />
+      ) : (
+        /* Main app - only loads after authentication */
+        <div className="app">
+          {/* Mobile Overlay */}
+          <div
+            className={`mobile-overlay ${isMobileMenuOpen ? 'open' : ''}`}
+            onClick={closeMobileMenu}
+          />
 
-        <PlanSelectionModal
-          isOpen={planSelectionModalOpen}
-          onClose={handleClosePlanSelection}
-          currentPlan={userStatus?.access_type || 'trial'}
-          userStatus={userStatus}
-          onPlanChange={handlePlanChange}
-        />
+          <Sidebar
+            chats={chats}
+            currentChatId={currentChatId}
+            onChatSelect={setCurrentChatId}
+            onNewChat={createNewChat}
+            onDeleteChat={handleDeleteChat}
+            isMobileMenuOpen={isMobileMenuOpen}
+            onCloseMobileMenu={closeMobileMenu}
+            isLoadingChats={isLoadingChats}
+            // Authentication props
+            isAuthenticated={isAuthenticated}
+            userStatus={userStatus}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+            onLogout={handleLogout}
+            // Plan management props
+            onOpenPlanSelection={handleOpenPlanSelection}
+          />
+          <div className="main-content">
+            <LawSelector
+              onToggleMobileMenu={toggleMobileMenu}
+              isAuthenticated={isAuthenticated}
+              onLogin={handleLogin}
+              onRegister={handleRegister}
+            />
+            <AnnouncementBar />
+            <ChatArea
+              messages={messages}
+              onSendMessage={sendMessage}
+              onRegenerateResponse={regenerateResponse}
+              isLoading={isLoading}
+              isLoadingMessages={isLoadingMessages}
+              currentChatId={currentChatId}
+              userStatus={userStatus}
+              onOpenPlanSelection={handleOpenPlanSelection}
+              onOpenAuthModal={() => setAuthModalOpen(true)}
+              isAuthenticated={isAuthenticated}
+            />
+          </div>
 
-        <SubscriptionManagementModal
-          isOpen={subscriptionModalOpen}
-          onClose={handleCloseSubscriptionModal}
-          userStatus={userStatus}
-          onSubscriptionChange={handleSubscriptionChange}
-        />
-      </div>
+          {/* Modals */}
+          <ConfirmDialog
+            isOpen={deleteConfirmOpen}
+            onClose={() => setDeleteConfirmOpen(false)}
+            onConfirm={confirmDeleteChat}
+            title="Obriši konverzaciju"
+            message="Da li ste sigurni da želite da obrišete ovu konverzaciju? Ova radnja se ne može poništiti."
+            confirmText="Obriši"
+            cancelText="Otkaži"
+            type="delete"
+          />
+
+          <ErrorDialog
+            isOpen={errorDialogOpen}
+            onClose={() => setErrorDialogOpen(false)}
+            title="Greška"
+            message={errorMessage}
+            buttonText="U redu"
+          />
+
+          <PlanSelectionModal
+            isOpen={planSelectionModalOpen}
+            onClose={handleClosePlanSelection}
+            currentPlan={userStatus?.access_type || 'trial'}
+            userStatus={userStatus}
+            onPlanChange={handlePlanChange}
+          />
+
+          <SubscriptionManagementModal
+            isOpen={subscriptionModalOpen}
+            onClose={handleCloseSubscriptionModal}
+            userStatus={userStatus}
+            onSubscriptionChange={handleSubscriptionChange}
+          />
+        </div>
+      )}
     </ThemeProvider>
   );
 }

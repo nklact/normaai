@@ -273,25 +273,18 @@ const ChatArea = ({ messages, onSendMessage, onRegenerateResponse, isLoading, is
     console.log('🎙️ Starting transcription process...');
     console.log('🎙️ Audio blob size:', audioBlob.size, 'bytes');
     console.log('🎙️ Audio blob type:', audioBlob.type);
-    
+
     try {
-      // Import device fingerprinting (same as other API calls)
-      const { getDeviceFingerprint } = await import('../utils/deviceFingerprint.js');
-      
       // Get auth token if user is authenticated
       const token = localStorage.getItem('norma_ai_access_token');
-      const deviceFingerprint = await getDeviceFingerprint();
-      const headers = {
-        'X-Device-Fingerprint': deviceFingerprint
-      };
-      
+      const headers = {};
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
       console.log('🎙️ Request headers:', headers);
       console.log('🎙️ Auth token present:', !!token);
-      console.log('🎙️ Device fingerprint:', deviceFingerprint);
 
       // Call secure backend endpoint instead of OpenAI directly
       console.log('🎙️ Sending request to backend...');

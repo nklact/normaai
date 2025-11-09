@@ -1,5 +1,4 @@
 // Simplified auth module without compile-time database validation
-use crate::api::extract_client_ip;
 use crate::database::get_user_status_optimized;
 use crate::models::*;
 use axum::{
@@ -7,13 +6,26 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, DEFAULT_COST};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, Row};
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationError};
+
+// Password validation function
+fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
+    let has_uppercase = password.chars().any(char::is_uppercase);
+    let has_lowercase = password.chars().any(char::is_lowercase);
+    let has_digit = password.chars().any(char::is_numeric);
+    let has_special = password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
+
+    if !(has_uppercase && has_lowercase && has_digit && has_special) {
+        return Err(ValidationError::new("Lozinka mora sadržavati velika i mala slova, broj i specijalni karakter"));
+    }
+    Ok(())
+}
 
 // JWT Claims structure (for custom tokens)
 #[derive(Debug, Serialize, Deserialize)]
@@ -98,6 +110,37 @@ pub fn verify_supabase_token(
     .map_err(|e| format!("Supabase token verification failed: {}", e))
 }
 
+// Query Supabase auth.identities to get OAuth providers for a user email
+async fn get_auth_providers_for_email(
+    email: &str,
+    pool: &Pool<Postgres>,
+) -> Result<Vec<String>, String> {
+    let result = sqlx::query(
+        r#"
+        SELECT DISTINCT i.provider
+        FROM auth.users u
+        JOIN auth.identities i ON u.id = i.user_id
+        WHERE u.email = $1
+        "#,
+    )
+    .bind(email)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to query auth providers: {}", e))?;
+
+    let providers: Vec<String> = result
+        .iter()
+        .filter_map(|row| row.try_get::<String, _>("provider").ok())
+        .collect();
+
+    Ok(providers)
+}
+
+// Filter out 'email' provider to get only OAuth providers
+fn filter_oauth_providers(providers: Vec<String>) -> Vec<String> {
+    providers.into_iter().filter(|p| p != "email").collect()
+}
+
 // Unified token verification - tries Supabase first, then custom
 // Returns (user_id from auth.users, is_supabase_token)
 pub async fn verify_any_token(
@@ -135,351 +178,247 @@ pub async fn verify_any_token(
     Ok(user_id)
 }
 
-// Check IP trial limits (max 3 trials per IP)
-pub async fn check_ip_trial_limits(
-    pool: &Pool<Postgres>,
-    ip_address: &str,
-) -> Result<bool, (StatusCode, Json<ErrorResponse>)> {
-    // Validate IP address format
-    if ip_address.parse::<std::net::IpAddr>().is_err() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_IP".to_string(),
-                message: "Neispravna IP adresa".to_string(),
-                details: None,
-            }),
-        ));
-    }
-
-    // Parse IP address for comparison
-    let parsed_ip: std::net::IpAddr = ip_address.parse().unwrap(); // Already validated above
-    let ip_network = ipnetwork::IpNetwork::from(parsed_ip);
-
-    let ip_trial = sqlx::query_as::<_, crate::models::IpTrialLimit>(
-        "SELECT id, ip_address, date, count, created_at FROM ip_trial_limits WHERE ip_address = $1",
-    )
-    .bind(ip_network)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
-                message: "Greška provere IP adrese".to_string(),
-                details: Some(serde_json::json!({"details": e.to_string()})),
-            }),
-        )
-    })?;
-
-    // Return true if no record found (allowed) or count < 3 (allowed)
-    // Return false if count >= 3 (blocked) - lifetime limit, not daily
-    Ok(ip_trial.map_or(true, |record| record.count < 3))
-}
-
-// Register endpoint
-pub async fn register_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
-    Json(request): Json<RegisterRequest>,
+// Link Supabase auth user to backend user (for registration and OAuth)
+pub async fn link_user_handler(
+    State((pool, _, _jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Validate input
-    if let Err(e) = request.validate() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "VALIDATION_ERROR".to_string(),
-                message: "Podaci nisu validni".to_string(),
-                details: Some(serde_json::to_value(e.field_errors()).unwrap()),
-            }),
-        ));
-    }
-
-    // Hash password
-    let password_hash = hash(request.password, DEFAULT_COST).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "HASH_ERROR".to_string(),
-                message: "Greška kodiranja lozinke".to_string(),
-                details: Some(serde_json::json!({"details": e.to_string()})),
-            }),
-        )
-    })?;
-
-    // Check for existing unregistered trial user with same device fingerprint
-    let existing_trial_user = sqlx::query(
-        "SELECT id, trial_messages_remaining FROM users WHERE device_fingerprint = $1 AND account_type = 'trial_unregistered'"
-    )
-    .bind(&request.device_fingerprint)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-        error: "DATABASE_ERROR".to_string(),
-        message: "Greška provere postojećeg korisnika".to_string(),
-        details: Some(serde_json::json!({"details": e.to_string()})),
-    })))?;
-
-    let (user_id, result) = if let Some(existing_device_trial) = existing_trial_user {
-        // Keep existing device trial record, create new user account with inherited messages
-        let trial_messages_remaining: Option<i32> =
-            existing_device_trial.get("trial_messages_remaining");
-        let new_user_id = Uuid::new_v4();
-
-        let insert_result = sqlx::query(
-            "INSERT INTO users (id, email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), NULL, $5)"
-        )
-        .bind(new_user_id)
-        .bind(&request.email)
-        .bind(&password_hash)
-        .bind(&request.device_fingerprint)
-        .bind(trial_messages_remaining)
-        .execute(&pool)
-        .await;
-
-        (new_user_id, insert_result)
+    // Extract Supabase auth_user_id DIRECTLY from JWT token (not from public.users)
+    // We need the auth.users.id, not the public.users.id!
+    let supabase_user_id = if let Some(supabase_secret) = supabase_jwt_secret.as_deref() {
+        headers
+            .get("Authorization")
+            .and_then(|auth_header| auth_header.to_str().ok())
+            .and_then(|auth_str| auth_str.strip_prefix("Bearer "))
+            .and_then(|token| verify_supabase_token(token, supabase_secret).ok())
+            .map(|claims| Uuid::parse_str(&claims.sub).ok())
+            .flatten()
     } else {
-        // Create new user if no trial user exists for this device
-        let new_user_id = Uuid::new_v4();
-
-        let insert_result = sqlx::query(
-            "INSERT INTO users (id, email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-             VALUES ($1, $2, $3, 'trial_registered', $4, NOW(), NULL, 5)"
-        )
-        .bind(new_user_id)
-        .bind(&request.email)
-        .bind(&password_hash)
-        .bind(&request.device_fingerprint)
-        .execute(&pool)
-        .await;
-
-        (new_user_id, insert_result)
+        None
     };
 
-    match result {
-        Ok(_) => {
-            // Generate email verification token
-            let verification_token: String = rand::thread_rng()
-                .sample_iter(&rand::distributions::Alphanumeric)
-                .take(64)
-                .map(char::from)
-                .collect();
-
-            let expires_at = chrono::Utc::now() + chrono::Duration::hours(24); // 24 hour expiry
-
-            // Store verification token in unified authentication_tokens table
-            AuthenticationToken::create(
-                &pool,
-                user_id,
-                "email_verification",
-                verification_token.clone(),
-                expires_at,
-            )
-            .await
-            .map_err(|e| {
-                println!("Failed to create verification token: {}", e);
-                // Don't fail registration if verification token creation fails
-            })
-            .ok();
-
-            // NOTE: Email sending moved to frontend via EmailJS
-            // Token is returned to frontend for email sending
-            println!(
-                "Verification token generated for {}: {}",
-                request.email, verification_token
-            );
-
-            // Migrate trial chats to registered user account
-            let migrated_count = sqlx::query(
-                "UPDATE chats SET user_id = $1 WHERE device_fingerprint = $2 AND user_id IS NULL",
-            )
-            .bind(user_id)
-            .bind(&request.device_fingerprint)
-            .execute(&pool)
-            .await
-            .map(|result| result.rows_affected() as i64)
-            .unwrap_or(0);
-
-            // Generate JWT token
-            let token = generate_token(user_id, &request.email, &jwt_secret).map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "TOKEN_ERROR".to_string(),
-                        message: "Greška generisanja tokena".to_string(),
-                        details: Some(serde_json::json!({"details": e})),
-                    }),
-                )
-            })?;
-
-            let migration_message =
-                "Nalog kreiran uspešno. Proverite email za verifikaciju.".to_string();
-
-            Ok(Json(AuthResponse {
-                success: true,
-                user_id: Some(user_id),
-                access_token: Some(token),
-                refresh_token: None,
-                migrated_chats: Some(migrated_count),
-                verification_token: Some(verification_token), // Added for EmailJS
-                message: migration_message,
-            }))
-        }
-        Err(e) => {
-            if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
-                // Check if user registered with OAuth provider
-                let existing_user =
-                    sqlx::query("SELECT oauth_provider FROM users WHERE email = $1")
-                        .bind(&request.email)
-                        .fetch_optional(&pool)
-                        .await
-                        .ok()
-                        .flatten();
-
-                let message = if let Some(user_row) = existing_user {
-                    let oauth_provider: Option<String> = user_row.get("oauth_provider");
-
-                    match oauth_provider.as_deref() {
-                        Some("google") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Google'.".to_string(),
-                        Some("facebook") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Facebook'.".to_string(),
-                        Some("apple") => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Apple'.".to_string(),
-                        _ => "Email adresa već postoji. Molimo prijavite se.".to_string(),
-                    }
-                } else {
-                    "Email adresa već postoji. Molimo prijavite se.".to_string()
-                };
-
-                Err((
-                    StatusCode::CONFLICT,
-                    Json(ErrorResponse {
-                        error: "EMAIL_EXISTS".to_string(),
-                        message,
-                        details: None,
-                    }),
-                ))
-            } else {
-                Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "DATABASE_ERROR".to_string(),
-                        message: "Greška kreiranja korisnika".to_string(),
-                        details: Some(serde_json::json!({"details": e.to_string()})),
-                    }),
-                ))
-            }
-        }
-    }
-}
-
-// Login endpoint
-pub async fn login_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
-    Json(request): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Validate input
-    if let Err(e) = request.validate() {
-        return Err((
-            StatusCode::BAD_REQUEST,
+    let supabase_user_id = supabase_user_id.ok_or_else(|| {
+        eprintln!("❌ Failed to extract supabase_user_id from token - no valid Supabase JWT found");
+        (
+            StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
-                error: "VALIDATION_ERROR".to_string(),
-                message: "Podaci nisu validni".to_string(),
-                details: Some(serde_json::to_value(e.field_errors()).unwrap()),
+                error: "INVALID_TOKEN".to_string(),
+                message: "Neispravan token".to_string(),
+                details: None,
             }),
-        ));
-    }
+        )
+    })?;
 
-    // Find user
-    let row =
-        sqlx::query("SELECT id, email, password_hash, oauth_provider FROM users WHERE email = $1")
-            .bind(&request.email)
+    // Get email and metadata from Supabase auth.users
+    println!("🔍 Looking up Supabase user with ID: {}", supabase_user_id);
+    println!("🔍 Using DATABASE_URL pool to query auth.users");
+
+    // First, test if we can query auth.users at all
+    let test_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM auth.users")
+        .fetch_one(&pool)
+        .await
+        .unwrap_or(-1);
+    println!("🔍 Total users in auth.users: {}", test_count);
+
+    let supabase_user =
+        sqlx::query("SELECT email, raw_user_meta_data FROM auth.users WHERE id = $1")
+            .bind(supabase_user_id)
             .fetch_optional(&pool)
             .await
             .map_err(|e| {
+                eprintln!("❌ Failed to fetch Supabase user {}: {}", supabase_user_id, e);
+                eprintln!("❌ SQL error details: {:?}", e);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
                         error: "DATABASE_ERROR".to_string(),
                         message: "Greška baze podataka".to_string(),
-                        details: Some(serde_json::json!({"details": e.to_string()})),
+                        details: Some(serde_json::json!({"details": e.to_string(), "user_id": supabase_user_id.to_string()})),
                     }),
                 )
             })?;
 
-    let user = row.ok_or_else(|| {
-        (StatusCode::UNAUTHORIZED, Json(ErrorResponse {
-            error: "INVALID_CREDENTIALS".to_string(),
-            message: "Neispravna email adresa ili lozinka. Proverite podatke ili se registrujte ukoliko nemate nalog.".to_string(),
-            details: Some(serde_json::json!({"details": "Email ili lozinka nisu tačni"})),
-        }))
+    let supabase_user = supabase_user.ok_or_else(|| {
+        eprintln!("❌ Supabase user {} not found in auth.users table", supabase_user_id);
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "USER_NOT_FOUND".to_string(),
+                message: "Supabase korisnik nije pronađen".to_string(),
+                details: Some(serde_json::json!({"supabase_user_id": supabase_user_id.to_string()})),
+            }),
+        )
     })?;
 
-    let user_id: Uuid = user.get("id");
-    let email: String = user.get("email");
-    let stored_hash: String = user.get("password_hash");
-    let oauth_provider: Option<String> = user.get("oauth_provider");
+    let email: String = supabase_user.get("email");
+    let raw_meta: Option<serde_json::Value> = supabase_user.get("raw_user_meta_data");
 
-    // Check if user registered with OAuth only (no password)
-    if stored_hash.is_empty() || stored_hash == "$2b$12$placeholder.hash.for.unregistered.users" {
-        if let Some(provider) = oauth_provider {
-            let message = match provider.as_str() {
-                "google" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Google'.",
-                "facebook" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Facebook'.",
-                "apple" => "Email adresa već postoji. Molimo prijavite se koristeći 'Prijavi se sa Apple'.",
-                _ => "Email adresa već postoji. Molimo koristite opciju prijave sa kojom ste kreirali nalog.",
-            };
+    // For manual verification: always start as false when user registers
+    // They need to verify via our verification endpoint (not Supabase's auto-confirm)
+    // OAuth users are automatically verified (they verified with Google/Apple)
+    println!("🔍 DEBUG: raw_user_meta_data = {:?}", raw_meta);
+    let provider_value = raw_meta
+        .as_ref()
+        .and_then(|m| m.get("provider"))
+        .and_then(|p| p.as_str());
+    println!("🔍 DEBUG: provider from metadata = {:?}", provider_value);
 
-            return Err((
-                StatusCode::BAD_REQUEST,
+    let is_oauth = provider_value
+        .map(|p| p != "email")
+        .unwrap_or(false);
+
+    println!("🔍 DEBUG: is_oauth = {}, email_verified will be = {}", is_oauth, is_oauth);
+    let email_verified = is_oauth; // OAuth = verified, email/password = needs manual verification
+
+    // Extract OAuth provider and profile info from metadata
+    let (oauth_provider, name, profile_picture) = if let Some(meta) = raw_meta {
+        let provider = meta
+            .get("provider")
+            .and_then(|p| p.as_str())
+            .map(String::from);
+        let full_name = meta
+            .get("full_name")
+            .and_then(|n| n.as_str())
+            .map(String::from);
+        let avatar = meta
+            .get("avatar_url")
+            .and_then(|a| a.as_str())
+            .map(String::from);
+        (provider, full_name, avatar)
+    } else {
+        (None, None, None)
+    };
+
+    // Check if user already exists in public.users by auth_user_id
+    let existing_user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE auth_user_id = $1")
+        .bind(supabase_user_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
-                    error: "OAUTH_ACCOUNT".to_string(),
-                    message: message.to_string(),
-                    details: Some(serde_json::json!({"oauth_provider": provider})),
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška baze podataka".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
                 }),
-            ));
+            )
+        })?;
+
+    let (user_id, migrated_chats) = if let Some(user) = existing_user {
+        // Check if user is deleted and within grace period - auto-restore
+        if user.account_status == "deleted" {
+            if let Some(deleted_at) = user.deleted_at {
+                let grace_period_ends = deleted_at + chrono::Duration::days(30);
+                if chrono::Utc::now() < grace_period_ends {
+                    // Auto-restore user on login
+                    crate::database::restore_user(user.id, &pool)
+                        .await
+                        .map_err(|e| {
+                            eprintln!("Failed to auto-restore user on login: {}", e);
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorResponse {
+                                    error: "RESTORE_ERROR".to_string(),
+                                    message: "Greška prilikom vraćanja naloga".to_string(),
+                                    details: Some(serde_json::json!({"details": e.to_string()})),
+                                }),
+                            )
+                        })?;
+
+                    println!("✅ Auto-restored deleted account for user {}", user.email);
+                } else {
+                    // Grace period expired
+                    return Err((
+                        StatusCode::FORBIDDEN,
+                        Json(ErrorResponse {
+                            error: "ACCOUNT_PERMANENTLY_DELETED".to_string(),
+                            message: "Ovaj nalog je trajno obrisan".to_string(),
+                            details: None,
+                        }),
+                    ));
+                }
+            }
         }
-    }
 
-    // Verify password
-    let password_valid = verify(&request.password, &stored_hash).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "HASH_ERROR".to_string(),
-                message: "Greška verifikacije lozinke".to_string(),
-                details: Some(serde_json::json!({"details": e.to_string()})),
-            }),
+        // User already linked (and restored if needed) - just return their info
+        (user.id, 0)
+    } else {
+        // Create new registered user with trial (5 messages)
+        let new_user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (
+                id, auth_user_id, email, password_hash, name, oauth_provider,
+                oauth_profile_picture_url, account_type, email_verified,
+                trial_started_at, trial_messages_remaining
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'trial_registered', $8, NOW(), 5)",
         )
-    })?;
+        .bind(new_user_id)
+        .bind(supabase_user_id)
+        .bind(&email)
+        .bind("") // password_hash - empty for Supabase users
+        .bind(&name)
+        .bind(&oauth_provider)
+        .bind(&profile_picture)
+        .bind(email_verified)
+        .execute(&pool)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška kreiranja korisnika".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
 
-    if !password_valid {
-        return Err((StatusCode::UNAUTHORIZED, Json(ErrorResponse {
-            error: "INVALID_CREDENTIALS".to_string(),
-            message: "Neispravna email adresa ili lozinka. Proverite podatke ili se registrujte ukoliko nemate nalog.".to_string(),
-            details: Some(serde_json::json!({"details": "Email ili lozinka nisu tačni"})),
-        })));
-    }
-
-    // Generate JWT token
-    let token = generate_token(user_id, &email, &jwt_secret).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "TOKEN_ERROR".to_string(),
-                message: "Greška generisanja tokena".to_string(),
-                details: Some(serde_json::json!({"details": e})),
-            }),
-        )
-    })?;
+        (new_user_id, 0)
+    };
 
     Ok(Json(AuthResponse {
         success: true,
         user_id: Some(user_id),
-        access_token: Some(token),
+        access_token: None, // Supabase handles tokens
         refresh_token: None,
-        migrated_chats: None,
-        verification_token: None, // Not needed for login
-        message: "Uspešna prijava".to_string(),
+        migrated_chats: Some(migrated_chats),
+        verification_token: None,
+        message: "Uspešno povezan nalog".to_string(),
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct CheckProviderRequest {
+    pub email: String,
+}
+
+#[derive(Serialize)]
+pub struct CheckProviderResponse {
+    pub has_oauth: bool,
+    pub providers: Vec<String>,
+    pub user_exists: bool, // NEW: explicitly indicate if user exists
+}
+
+pub async fn check_provider_handler(
+    State((pool, _, _, _, _)): State<AuthAppState>,
+    Json(request): Json<CheckProviderRequest>,
+) -> Result<Json<CheckProviderResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Query Supabase auth.identities to get ALL providers
+    let all_providers = get_auth_providers_for_email(&request.email, &pool)
+        .await
+        .unwrap_or_default();
+
+    // User exists if they have ANY provider (email or OAuth)
+    let user_exists = !all_providers.is_empty();
+
+    // Filter to get only OAuth providers (for display purposes)
+    let oauth_providers = filter_oauth_providers(all_providers);
+
+    Ok(Json(CheckProviderResponse {
+        has_oauth: !oauth_providers.is_empty(),
+        providers: oauth_providers,
+        user_exists, // Explicitly tell frontend if user exists
     }))
 }
 
@@ -497,13 +436,7 @@ pub async fn user_status_handler(
     )
     .await;
 
-    // Get device fingerprint
-    let device_fingerprint = headers
-        .get("X-Device-Fingerprint")
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    match get_user_status_optimized(user_id, device_fingerprint, &pool).await {
+    match get_user_status_optimized(user_id, &pool).await {
         Ok(status) => Ok(Json(status)),
         Err(e) => {
             eprintln!("Failed to get user status: {}", e);
@@ -807,6 +740,100 @@ pub async fn reset_password_handler(
     Ok(Json(MessageResponse {
         success: true,
         message: "Lozinka je uspešno resetovana".to_string(),
+    }))
+}
+
+// Request email verification (send/resend verification email)
+pub async fn request_email_verification_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<VerificationEmailResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Verify user is authenticated
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Neautorizovan pristup".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    // Get user from database
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE id = $1 AND account_status = 'active'",
+    )
+    .bind(user_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "DATABASE_ERROR".to_string(),
+                message: "Greška baze podataka".to_string(),
+                details: Some(serde_json::json!({"details": e.to_string()})),
+            }),
+        )
+    })?
+    .ok_or((
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "USER_NOT_FOUND".to_string(),
+            message: "Korisnik nije pronađen".to_string(),
+            details: None,
+        }),
+    ))?;
+
+    // Check if already verified
+    if user.email_verified {
+        return Ok(Json(VerificationEmailResponse {
+            success: true,
+            message: "Email je već verifikovan".to_string(),
+            email: None,
+            verification_token: None,
+        }));
+    }
+
+    // Generate verification token (64 characters, 24 hour expiry)
+    let token: String = rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(24);
+
+    // Store verification token
+    AuthenticationToken::create(&pool, user_id, "email_verification", token.clone(), expires_at)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška kreiranja verifikacionog tokena".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    println!("📧 Email verification token generated for {}: {}", user.email, token);
+
+    // Return token and email for frontend to send via EmailJS
+    Ok(Json(VerificationEmailResponse {
+        success: true,
+        message: "Verifikacioni token je kreiran".to_string(),
+        email: Some(user.email),
+        verification_token: Some(token),
     }))
 }
 
@@ -1254,156 +1281,6 @@ pub async fn cancel_subscription_handler(
 }
 
 // Enhanced trial start endpoint with bypass detection
-pub async fn start_trial_handler(
-    State((pool, _, _, _, _)): State<AuthAppState>,
-    headers: HeaderMap,
-    Json(request): Json<StartTrialRequest>,
-) -> Result<Json<TrialResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Validate device fingerprint format
-    if request.device_fingerprint.len() != 64
-        || !request
-            .device_fingerprint
-            .chars()
-            .all(|c| c.is_ascii_hexdigit())
-    {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "INVALID_FINGERPRINT".to_string(),
-                message: "Neispravna identifikacija uređaja".to_string(),
-                details: None,
-            }),
-        ));
-    }
-
-    // Extract client IP from headers (consistent with api.rs)
-    let client_ip_str = extract_client_ip(&headers);
-
-    // Check IP trial limits (max 3 trials per IP) - includes IP validation
-    if !check_ip_trial_limits(&pool, &client_ip_str).await? {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(ErrorResponse {
-                error: "IP_LIMIT_EXCEEDED".to_string(),
-                message: "Maksimalan broj trial naloga za ovu IP adresu je dostignut (3)"
-                    .to_string(),
-                details: Some(serde_json::json!({
-                    "max_trials_per_ip": 3
-                })),
-            }),
-        ));
-    }
-
-    // Check if device fingerprint already has a device trial record
-    let existing_trial = sqlx::query("SELECT trial_started_at, trial_messages_remaining FROM users WHERE device_fingerprint = $1 AND account_type = 'trial_unregistered' AND account_status = 'active'")
-        .bind(&request.device_fingerprint)
-        .fetch_optional(&pool)
-        .await
-        .map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
-                message: "Greška provere device fingerprint".to_string(),
-                details: Some(serde_json::json!({"details": e.to_string()})),
-            }))
-        })?;
-
-    if let Some(existing_trial) = existing_trial {
-        let trial_started_at: chrono::DateTime<chrono::Utc> =
-            existing_trial.get("trial_started_at");
-        let trial_messages_remaining: Option<i32> = existing_trial.get("trial_messages_remaining");
-
-        // Device trial already exists - return existing trial status
-        return Ok(Json(TrialResponse {
-            success: true,
-            trial_started_at,
-            trial_expires_at: None,
-            messages_remaining: trial_messages_remaining.unwrap_or(0),
-            message: format!(
-                "Uređaj već ima aktivan trial sa {} preostalih poruka",
-                trial_messages_remaining.unwrap_or(0)
-            ),
-        }));
-    }
-
-    // Create new unregistered trial user
-    let trial_email = format!(
-        "unregistered_{}@trial.local",
-        &request.device_fingerprint[0..8]
-    );
-
-    // Insert unregistered trial user with 5 total messages
-    // ON CONFLICT: If user was deleted but device_fingerprint exists, resurrect the record
-    sqlx::query(
-        "INSERT INTO users (email, password_hash, account_type, device_fingerprint, trial_started_at, trial_expires_at, trial_messages_remaining)
-         VALUES ($1, '$2b$12$placeholder.hash.for.unregistered.users', 'trial_unregistered', $2, NOW(), NULL, 5)
-         ON CONFLICT (email) DO UPDATE SET
-           device_fingerprint = EXCLUDED.device_fingerprint,
-           trial_started_at = NOW(),
-           trial_expires_at = NULL,
-           trial_messages_remaining = 5,
-           account_type = 'trial_unregistered',
-           account_status = 'active',
-           updated_at = NOW()"
-    )
-    .bind(&trial_email)
-    .bind(&request.device_fingerprint)
-    .execute(&pool)
-    .await
-    .map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse {
-            error: "DATABASE_ERROR".to_string(),
-            message: "Greška kreiranja trial naloga".to_string(),
-            details: Some(serde_json::json!({"details": e.to_string()})),
-        }))
-    })?;
-
-    // Log trial start activity
-    let client_ip_network =
-        ipnetwork::IpNetwork::from(client_ip_str.parse::<std::net::IpAddr>().unwrap());
-    sqlx::query(
-        "INSERT INTO ip_trial_limits (ip_address, count)
-         VALUES ($1, 1)
-         ON CONFLICT (ip_address)
-         DO UPDATE SET count = ip_trial_limits.count + 1",
-    )
-    .bind(client_ip_network)
-    .execute(&pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "DATABASE_ERROR".to_string(),
-                message: "Greška logovanja trial aktivnosti".to_string(),
-                details: Some(serde_json::json!({"details": e.to_string()})),
-            }),
-        )
-    })?;
-
-    Ok(Json(TrialResponse {
-        success: true,
-        trial_started_at: chrono::Utc::now(),
-        trial_expires_at: None,
-        messages_remaining: 5, // New trial gets 5 messages
-        message: "Trial uspešno aktiviran".to_string(),
-    }))
-}
-
-// Helper structs
-#[derive(serde::Deserialize)]
-pub struct StartTrialRequest {
-    pub device_fingerprint: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct TrialResponse {
-    pub success: bool,
-    pub trial_started_at: chrono::DateTime<chrono::Utc>,
-    pub trial_expires_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub messages_remaining: i32, // Messages remaining for trial
-    pub message: String,
-}
-
 #[derive(serde::Deserialize, Validate)]
 pub struct ForgotPasswordRequest {
     #[validate(email(message = "Neispravna email adresa"))]
@@ -1777,6 +1654,235 @@ pub struct ChangePlanRequest {
 #[derive(Debug, Deserialize)]
 pub struct ChangeBillingPeriodRequest {
     pub billing_period: String,
+}
+
+// ==================== ACCOUNT DELETION ENDPOINTS ====================
+
+/// Request account deletion (soft delete with 30-day grace period)
+pub async fn request_delete_account_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<crate::models::DeleteAccountRequest>,
+) -> Result<Json<crate::models::DeleteAccountResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Verify token (supports both Supabase and custom JWT tokens)
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Neautorizovan pristup".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+
+    // Get user from database
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE id = $1 AND account_status = 'active'",
+    )
+    .bind(user_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error fetching user: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "DATABASE_ERROR".to_string(),
+                message: "Greška baze podataka".to_string(),
+                details: Some(serde_json::json!({"details": e.to_string()})),
+            }),
+        )
+    })?
+    .ok_or((
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "USER_NOT_FOUND".to_string(),
+            message: "Korisnik nije pronađen".to_string(),
+            details: None,
+        }),
+    ))?;
+    // Validation: confirmation must be true
+    if !payload.confirmation {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "CONFIRMATION_REQUIRED".to_string(),
+                message: "Potvrda brisanja naloga je obavezna".to_string(),
+                details: None,
+            }),
+        ));
+    }
+
+    // Check if user is team admin
+    let is_admin = crate::database::is_team_admin(user.id, &pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Database error checking team admin status: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška baze podataka".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    if is_admin {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "TEAM_ADMIN".to_string(),
+                message: "Ne možete obrisati nalog dok ste administrator tima. Prvo prebacite vlasništvo tima.".to_string(),
+                details: None,
+            }),
+        ));
+    }
+
+    // No password verification needed - all users authenticate through Supabase
+    // JWT token verification (already done) is sufficient authentication
+    // Passwords are managed by Supabase Auth, not stored in public.users
+
+    // Cancel active subscription if exists
+    if user.subscription_status == Some("active".to_string()) {
+        crate::database::cancel_subscription(user.id, &pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to cancel subscription: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "SUBSCRIPTION_CANCEL_ERROR".to_string(),
+                        message: "Greška prilikom otkazivanja pretplate".to_string(),
+                        details: Some(serde_json::json!({"details": e.to_string()})),
+                    }),
+                )
+            })?;
+    }
+
+    // Soft delete user
+    let deleted_at = crate::database::soft_delete_user(user.id, &pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to soft delete user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DELETE_ERROR".to_string(),
+                    message: "Greška prilikom brisanja naloga".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    let grace_period_ends = deleted_at + chrono::Duration::days(30);
+
+    // TODO: Send email notification about deletion and grace period
+
+    Ok(Json(crate::models::DeleteAccountResponse {
+        success: true,
+        message: "Brisanje vašeg naloga je zakazano. Ukoliko se ponovo prijavite u roku od 30 dana, vaš nalog će biti vraćen. Nakon isteka tog perioda, nalog će biti trajno obrisan.".to_string(),
+        grace_period_ends: Some(grace_period_ends.to_rfc3339()),
+    }))
+}
+
+/// Restore account during grace period (called manually or automatically on login)
+pub async fn restore_account_handler(
+    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<crate::models::RestoreAccountResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Verify token (supports both Supabase and custom JWT tokens)
+    let user_id = crate::database::verify_user_from_headers_async(
+        &headers,
+        &jwt_secret,
+        supabase_jwt_secret.as_deref(),
+        &pool,
+    )
+    .await
+    .ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".to_string(),
+                message: "Neautorizovan pristup".to_string(),
+                details: None,
+            }),
+        )
+    })?;
+    // Check if user is within grace period
+    let within_grace_period = crate::database::is_within_grace_period(user_id, &pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Database error checking grace period: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Greška baze podataka".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    if !within_grace_period {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "GRACE_PERIOD_EXPIRED".to_string(),
+                message:
+                    "Period za oporavak naloga je istekao ili nalog nije bio zakazan za brisanje"
+                        .to_string(),
+                details: None,
+            }),
+        ));
+    }
+
+    // Restore user
+    let restored_user = crate::database::restore_user(user_id, &pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to restore user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "RESTORE_ERROR".to_string(),
+                    message: "Greška prilikom vraćanja naloga".to_string(),
+                    details: Some(serde_json::json!({"details": e.to_string()})),
+                }),
+            )
+        })?;
+
+    // Get full user status
+    let user_status =
+        crate::database::get_user_status_optimized(Some(restored_user.id), &pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to get user status: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "STATUS_ERROR".to_string(),
+                        message: "Greška prilikom preuzimanja statusa korisnika".to_string(),
+                        details: Some(serde_json::json!({"details": e})),
+                    }),
+                )
+            })?;
+
+    // TODO: Send email notification about restoration
+
+    Ok(Json(crate::models::RestoreAccountResponse {
+        success: true,
+        message: "Vaš nalog je uspešno vraćen.".to_string(),
+        user_status,
+    }))
 }
 
 // ==================== EMAIL FUNCTIONS ====================

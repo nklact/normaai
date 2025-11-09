@@ -7,10 +7,10 @@ use scraper::{Html, Selector};
 use crate::models::*;
 use sqlx::PgPool;
 
-type AppState = (PgPool, String, String); // (pool, api_key, jwt_secret)
+type AppState = (PgPool, String, String, Option<String>); // (pool, api_key, jwt_secret, supabase_jwt_secret)
 
 pub async fn fetch_law_content_handler(
-    State((pool, _, _)): State<AppState>,
+    State((pool, _, _, _)): State<AppState>,
     Json(request): Json<FetchLawContentRequest>,
 ) -> Result<ResponseJson<LawContent>, StatusCode> {
     match fetch_law_content_direct(request.url, &pool).await {

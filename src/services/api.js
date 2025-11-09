@@ -1,6 +1,5 @@
 // Dynamic import of Tauri API - only available in desktop builds
 import { createClient } from '@supabase/supabase-js';
-import { getDeviceFingerprint } from '../utils/deviceFingerprint.js';
 
 // Platform Detection
 const isTauriApp = Boolean(window.__TAURI__);
@@ -96,8 +95,7 @@ class ApiService {
    */
   async getAuthHeaders() {
     const headers = {
-      'Content-Type': 'application/json',
-      'X-Device-Fingerprint': await getDeviceFingerprint()
+      'Content-Type': 'application/json'
     };
 
     // Get Supabase session
@@ -154,19 +152,29 @@ class ApiService {
    * Register a new user account with email/password
    */
   async register(email, password) {
-    const deviceFingerprint = await getDeviceFingerprint();
+    console.log('📝 Starting registration for:', email);
 
+    // Step 1: Create Supabase auth user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          device_fingerprint: deviceFingerprint
-        }
+        emailRedirectTo: `${window.location.origin}/verify-email.html`
       }
     });
 
+    console.log('📝 Supabase signUp response:', { data, error });
+
     if (error) {
+      // Log the full error for debugging
+      console.error('❌ Supabase registration error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        name: error.name
+      });
+
       // Translate Supabase error messages to Serbian
       let errorMessage = 'Registracija nije uspela';
       if (error.message.includes('User already registered')) {
@@ -175,15 +183,52 @@ class ApiService {
         errorMessage = 'Lozinka mora imati najmanje 6 karaktera';
       } else if (error.message.includes('invalid email')) {
         errorMessage = 'Nevažeća email adresa';
+      } else if (error.status === 500) {
+        // Supabase server error - show more helpful message
+        errorMessage = `Greška servera pri registraciji: ${error.message}`;
       }
       throw new Error(errorMessage);
     }
 
+    // Check if user already exists (OAuth duplicate registration)
+    if (data.user?.identities?.length === 0) {
+      throw new Error('Email je već registrovan. Pokušajte se prijaviti pomoću Google ili Apple naloga ili koristite opciju za prijavu.');
+    }
+
+    // Step 2: Link Supabase user to backend (creates trial_registered account with 5 messages)
+    if (data.session) {
+      try {
+        const linkResponse = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/link-user`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${data.session.access_token}`
+          }
+        });
+
+        if (!linkResponse.ok) {
+          console.error('Failed to link user to backend:', await linkResponse.text());
+          // Don't fail registration if linking fails - user is created in Supabase
+        } else {
+          const linkResult = await linkResponse.json();
+          console.log('✅ User linked to backend:', linkResult);
+
+          // Step 3: Request verification email for email/password users
+          try {
+            await this.requestEmailVerification(data.session.access_token);
+          } catch (verificationError) {
+            console.error('Failed to send verification email:', verificationError);
+            // Don't fail registration if verification email fails
+          }
+        }
+      } catch (linkError) {
+        console.error('Error linking user to backend:', linkError);
+        // Don't fail registration if linking fails
+      }
+    }
+
     return {
       success: true,
-      message: data.user?.identities?.length === 0
-        ? 'Email je već registrovan. Prijavite se.'
-        : 'Uspešno ste se registrovali! Proverite email za verifikaciju.',
+      message: 'Uspešno ste se registrovali! Proverite email za verifikaciju.',
       user: data.user,
       session: data.session
     };
@@ -193,6 +238,40 @@ class ApiService {
    * Login with email and password
    */
   async login(email, password) {
+    // First check if user has OAuth providers (before attempting Supabase login)
+    try {
+      const checkResponse = await fetch(`${API_BASE_URL}/api/auth/check-provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      if (checkResponse.ok) {
+        const providerData = await checkResponse.json();
+
+        // If user has OAuth providers, show helpful error before attempting login
+        if (providerData.has_oauth && providerData.providers.length > 0) {
+          const providers = providerData.providers;
+
+          if (providers.includes('google') && providers.includes('apple')) {
+            throw new Error('Neispravni podaci za prijavu. Molimo prijavite se pomoću Google ili Apple naloga.');
+          } else if (providers.includes('google')) {
+            throw new Error('Neispravni podaci za prijavu. Molimo prijavite se sa Google nalogom.');
+          } else if (providers.includes('apple')) {
+            throw new Error('Neispravni podaci za prijavu. Molimo prijavite se sa Apple nalogom.');
+          } else {
+            throw new Error('Neispravni podaci za prijavu. Molimo prijavite se pomoću Google ili Apple naloga.');
+          }
+        }
+      }
+    } catch (checkError) {
+      // If the error is our custom OAuth message, throw it
+      if (checkError.message.includes('Molimo prijavite se')) {
+        throw checkError;
+      }
+      // Otherwise, continue with normal login attempt
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -209,6 +288,11 @@ class ApiService {
         errorMessage = 'Korisnik nije pronađen';
       }
       throw new Error(errorMessage);
+    }
+
+    // Link user to backend (in case they weren't linked before)
+    if (data.session) {
+      await this.linkOAuthUser(data.session);
     }
 
     return {
@@ -230,7 +314,6 @@ class ApiService {
    */
   async signInWithGoogle() {
     console.log('🚀 signInWithGoogle() called');
-    const deviceFingerprint = await getDeviceFingerprint();
 
     // Detect platform
     const isTauriApp = Boolean(window.__TAURI__);
@@ -307,6 +390,10 @@ class ApiService {
               clearTimeout(timeout);
               clearInterval(checkSession);
               console.log('✅ Desktop OAuth successful, session established');
+
+              // Link OAuth user to backend
+              await this.linkOAuthUser(session);
+
               resolve({ session, user: session.user });
             } else if (sessionError) {
               clearTimeout(timeout);
@@ -402,6 +489,10 @@ class ApiService {
         }
 
         console.log('✅ Supabase session established');
+
+        // Link OAuth user to backend
+        await this.linkOAuthUser(data.session);
+
         return { session: data.session, user: data.user };
 
       } catch (authError) {
@@ -499,6 +590,10 @@ class ApiService {
               clearTimeout(timeout);
               clearInterval(checkSession);
               console.log('✅ Desktop Apple OAuth successful, session established');
+
+              // Link OAuth user to backend
+              this.linkOAuthUser(session).catch(err => console.error('Failed to link Apple user:', err));
+
               resolve({ session, user: session.user });
             } else if (sessionError) {
               clearTimeout(timeout);
@@ -579,6 +674,10 @@ class ApiService {
         }
 
         console.log('✅ Supabase session established');
+
+        // Link OAuth user to backend
+        await this.linkOAuthUser(data.session);
+
         return { session: data.session, user: data.user };
 
       } catch (authError) {
@@ -591,6 +690,35 @@ class ApiService {
     throw new Error('Apple Sign-In is only available on iOS and desktop platforms');
   }
 
+  /**
+   * Link OAuth/email user to backend after Supabase auth
+   */
+  async linkOAuthUser(session) {
+    if (!session || !session.access_token) {
+      console.warn('No session to link');
+      return;
+    }
+
+    try {
+      const linkResponse = await fetch(`${API_BASE_URL}/api/auth/link-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!linkResponse.ok) {
+        const errorText = await linkResponse.text();
+        console.error('Failed to link OAuth user to backend:', errorText);
+      } else {
+        const linkResult = await linkResponse.json();
+        console.log('✅ OAuth user linked to backend:', linkResult);
+      }
+    } catch (error) {
+      console.error('Error linking OAuth user to backend:', error);
+    }
+  }
 
   /**
    * Logout and clear session
@@ -623,51 +751,6 @@ class ApiService {
 
     const result = await response.json();
     console.log('🔍 DEBUG: getUserStatus result:', result);
-    return result;
-  }
-
-  /**
-   * Start a trial for the current device
-   */
-  async startTrial() {
-    console.log('🔍 DEBUG: apiService.startTrial() called');
-    const deviceFingerprint = await getDeviceFingerprint();
-    console.log('🔍 DEBUG: startTrial() with deviceFingerprint:', deviceFingerprint);
-
-    const response = await fetch(`${API_BASE_URL}/api/trial/start`, {
-      method: 'POST',
-      headers: await this.getAuthHeaders(),
-      body: JSON.stringify({ device_fingerprint: deviceFingerprint })
-    });
-
-    console.log('🔍 DEBUG: startTrial response status:', response.status);
-
-    if (!response.ok) {
-      let errorText = '';
-      let errorCode = '';
-      try {
-        const responseText = await response.text();
-        console.error('🔍 DEBUG: Error response text:', responseText);
-        try {
-          const errorJson = JSON.parse(responseText);
-          errorCode = errorJson.error || '';
-          errorText = errorJson.message || `Trial start failed: ${response.status}`;
-        } catch (jsonError) {
-          errorText = responseText || `Trial start failed: ${response.status}`;
-        }
-      } catch (readError) {
-        errorText = `Trial start failed: ${response.status}`;
-      }
-
-      // Include error code in the error message for easier detection
-      if (errorCode === 'IP_LIMIT_EXCEEDED') {
-        throw new Error(`IP_LIMIT_EXCEEDED: ${errorText}`);
-      }
-      throw new Error(errorText);
-    }
-
-    const result = await response.json();
-    console.log('🔍 DEBUG: startTrial result:', result);
     return result;
   }
 
@@ -708,6 +791,88 @@ class ApiService {
   }
 
   /**
+   * Request email verification (send/resend verification email)
+   */
+  async requestEmailVerification(accessToken = null) {
+    try {
+      const token = accessToken || await this.getAccessToken();
+      if (!token) {
+        throw new Error('No access token available');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/auth/request-email-verification`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to request email verification');
+      }
+
+      const result = await response.json();
+
+      // If we got a verification token, send email via EmailJS
+      if (result.verification_token && result.email) {
+        await this.sendVerificationEmail(result.email, result.verification_token);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error requesting email verification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send verification email via EmailJS
+   */
+  async sendVerificationEmail(email, verificationToken) {
+    try {
+      // Import EmailJS
+      const emailjs = await import('@emailjs/browser');
+
+      // Verification URL that user will click
+      // ALWAYS use production website URL, regardless of where user registered from
+      // This ensures verification works from desktop app, mobile app, or web
+      const verificationUrl = `https://chat.normaai.rs/verify-email.html?token=${verificationToken}`;
+
+      const templateParams = {
+        email: email,
+        verification_url: verificationUrl,
+        app_name: 'Norma AI'
+      };
+
+      // Send email using EmailJS (same setup as password reset)
+      // TODO: Configure EmailJS service ID, template ID, and public key in environment variables
+      const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+      const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_VERIFICATION_TEMPLATE_ID;
+      const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
+      if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+        console.warn('EmailJS not configured. Verification email not sent.');
+        console.log('Verification URL would be:', verificationUrl);
+        return;
+      }
+
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        templateParams,
+        EMAILJS_PUBLIC_KEY
+      );
+
+      console.log('✅ Verification email sent to:', email);
+    } catch (error) {
+      console.error('Failed to send verification email via EmailJS:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if user is authenticated
    */
   async isAuthenticated() {
@@ -743,8 +908,7 @@ class ApiService {
       method: 'POST',
       headers: await this.getAuthHeaders(),
       body: JSON.stringify({
-        title,
-        device_fingerprint: await getDeviceFingerprint()
+        title
       })
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -843,10 +1007,7 @@ class ApiService {
     // API key is managed by backend via environment variables
     const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/question`, {
       method: 'POST',
-      body: JSON.stringify({
-        ...questionRequest,
-        device_fingerprint: await getDeviceFingerprint()
-      })
+      body: JSON.stringify(questionRequest)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
@@ -882,8 +1043,6 @@ class ApiService {
    * Upgrade user plan (placeholder for payment processing)
    */
   async upgradePlan(planId, planData) {
-    const deviceFingerprint = await getDeviceFingerprint();
-
     // Placeholder implementation until backend endpoints are ready
     // TODO: Replace with actual API call when backend is implemented
     const result = await new Promise((resolve) => {
@@ -905,8 +1064,7 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({
         plan_id: planId,
-        plan_data: planData,
-        device_fingerprint: deviceFingerprint
+        plan_data: planData
       })
     });
 
@@ -925,13 +1083,9 @@ class ApiService {
    * Cancel user subscription
    */
   async cancelSubscription() {
-    const deviceFingerprint = await getDeviceFingerprint();
-
     const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/subscription/cancel`, {
       method: 'POST',
-      body: JSON.stringify({
-        device_fingerprint: deviceFingerprint
-      })
+      body: JSON.stringify({})
     });
 
     if (!response.ok) {
@@ -962,13 +1116,10 @@ class ApiService {
    * Change billing period (monthly/yearly)
    */
   async changeBillingPeriod(newPeriod) {
-    const deviceFingerprint = await getDeviceFingerprint();
-
     const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/subscription/billing-period`, {
       method: 'PUT',
       body: JSON.stringify({
-        billing_period: newPeriod,
-        device_fingerprint: deviceFingerprint
+        billing_period: newPeriod
       })
     });
 
@@ -984,14 +1135,11 @@ class ApiService {
    * Change subscription plan (individual/professional/team)
    */
   async changePlan(newPlanId, billingPeriod = 'monthly') {
-    const deviceFingerprint = await getDeviceFingerprint();
-
     const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/subscription/change-plan`, {
       method: 'PUT',
       body: JSON.stringify({
         plan_id: newPlanId,
-        billing_period: billingPeriod,
-        device_fingerprint: deviceFingerprint
+        billing_period: billingPeriod
       })
     });
 
@@ -1063,6 +1211,58 @@ class ApiService {
   }
 
   /**
+   * Request account deletion (soft delete with 30-day grace period)
+   * @param {string|null} password - Required for email/password users, null for OAuth users
+   * @returns {Promise<{success: boolean, message: string, grace_period_ends: string}>}
+   */
+  async requestDeleteAccount(password = null) {
+    try {
+      const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          password,
+          confirmation: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to delete account');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error requesting account deletion:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore account during grace period
+   * @returns {Promise<{success: boolean, message: string, user_status: object}>}
+   */
+  async restoreAccount() {
+    try {
+      const response = await this.makeAuthenticatedRequest(`${API_BASE_URL}/api/auth/restore-account`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to restore account');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error restoring account:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if running in desktop mode
    */
   isDesktop() {
@@ -1081,7 +1281,7 @@ class ApiService {
 export const apiService = new ApiService();
 export default apiService;
 
-// Export Supabase client for direct access (e.g., in AuthModal)
+// Export Supabase client for direct access (e.g., in AuthPage)
 export { supabase };
 
 // Named exports for convenience - bind context to preserve 'this'

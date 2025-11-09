@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import Icon from './Icons';
 import { ConversationsSkeleton } from './Skeleton';
+import DeleteAccountModal from './DeleteAccountModal';
+import AccountDeletionSuccessDialog from './AccountDeletionSuccessDialog';
+import InfoDialog from './InfoDialog';
+import apiService from '../services/api';
 import './Sidebar.css';
 import packageJson from '../../package.json';
 
@@ -27,6 +31,12 @@ const Sidebar = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isHelpSubmenuOpen, setIsHelpSubmenuOpen] = useState(false);
   const [showVersion, setShowVersion] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletionSuccessDialogOpen, setDeletionSuccessDialogOpen] = useState(false);
+  const [deletionSuccessMessage, setDeletionSuccessMessage] = useState('');
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
   const userMenuRef = useRef(null);
 
   const formatDate = (dateString) => {
@@ -62,7 +72,6 @@ const Sidebar = ({
 
     switch (planType) {
       case 'trial':
-      case 'trial_unregistered':
       case 'trial_registered':
         return 'Probni period';
       case 'individual':
@@ -80,7 +89,7 @@ const Sidebar = ({
 
   const isTrialUser = (accessType, userStatus) => {
     const planType = accessType || userStatus?.account_type;
-    return planType === 'trial' || planType === 'trial_unregistered' || planType === 'trial_registered';
+    return planType === 'trial' || planType === 'trial_registered';
   };
 
   const handleChatSelect = (chatId) => {
@@ -119,6 +128,48 @@ const Sidebar = ({
     if (onOpenPlanSelection) {
       onOpenPlanSelection();
     }
+  };
+
+  const handleDeleteAccountClick = () => {
+    setIsUserMenuOpen(false);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const result = await apiService.requestDeleteAccount(null);
+
+      // Close delete modal and show success message
+      setDeleteModalOpen(false);
+      setDeletionSuccessMessage(result.message);
+      setDeletionSuccessDialogOpen(true);
+    } catch (error) {
+      console.error('Delete account error:', error);
+      throw error; // Let modal handle error display
+    }
+  };
+
+  const handleResendVerificationEmail = async () => {
+    if (isResendingVerification) return;
+
+    try {
+      setIsResendingVerification(true);
+      await apiService.requestEmailVerification();
+      setInfoMessage('Verifikacioni email je ponovo poslat! Proverite inbox.');
+      setInfoDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to resend verification email:', error);
+      setInfoMessage('Greška prilikom slanja email-a. Pokušajte ponovo.');
+      setInfoDialogOpen(true);
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
+  const handleDeletionSuccessDialogClose = () => {
+    setDeletionSuccessDialogOpen(false);
+    // Logout user after account deletion success
+    onLogout();
   };
 
   const toggleHelpSubmenu = () => {
@@ -184,9 +235,9 @@ const Sidebar = ({
                 Probni period
               </span>
               <div className="messages-bar">
-                <div 
-                  className="messages-progress" 
-                  style={{ 
+                <div
+                  className="messages-progress"
+                  style={{
                     width: `${((userStatus.messages_remaining || 0) / 5) * 100}%`
                   }}
                 ></div>
@@ -198,6 +249,23 @@ const Sidebar = ({
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Email Verification Banner */}
+      {isAuthenticated && userStatus && !userStatus.email_verified && (
+        <div className="email-verification-banner">
+          <div className="verification-content">
+            <div className="verification-title">Verifikujte email</div>
+            <div className="verification-text">Proverite email za link za verifikaciju.</div>
+          </div>
+          <button
+            className="resend-verification-btn"
+            onClick={handleResendVerificationEmail}
+            disabled={isResendingVerification}
+          >
+            {isResendingVerification ? 'Šalje se...' : 'Pošalji ponovo'}
+          </button>
         </div>
       )}
 
@@ -324,6 +392,12 @@ const Sidebar = ({
                   </div>
                 )}
               </div>
+              <button className="dropdown-menu-item danger-item" onClick={handleDeleteAccountClick}>
+                <span className="menu-icon">
+                  <Icon name="trash2" size={14} />
+                </span>
+                Obriši nalog
+              </button>
               <button className="dropdown-menu-item logout-item" onClick={handleLogoutClick}>
                 <span className="menu-icon">
                   <Icon name="logOut" size={14} />
@@ -334,6 +408,33 @@ const Sidebar = ({
           )}
         </div>
       )}
+
+      {/* Delete Account Modal */}
+      <DeleteAccountModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteAccount}
+        requirePassword={false}
+        userEmail={userStatus?.email}
+      />
+
+      {/* Account Deletion Success Dialog */}
+      <AccountDeletionSuccessDialog
+        isOpen={deletionSuccessDialogOpen}
+        onClose={handleDeletionSuccessDialogClose}
+        title="✅ Nalog obrisan"
+        message={deletionSuccessMessage}
+        buttonText="U redu"
+      />
+
+      {/* Info Dialog (for simple notifications) */}
+      <InfoDialog
+        isOpen={infoDialogOpen}
+        onClose={() => setInfoDialogOpen(false)}
+        title="✉️ Email poslat"
+        message={infoMessage}
+        buttonText="U redu"
+      />
 
       <div className="sidebar-footer">
         <div className="app-info">

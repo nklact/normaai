@@ -6,6 +6,7 @@ mod simple_auth;
 mod legal_parser;
 mod laws;
 mod contracts;
+mod cleanup;
 
 use axum::{
     routing::{get, post, put, delete},
@@ -16,7 +17,7 @@ use axum::{
 use tower_http::cors::{CorsLayer, Any};
 use tower_http::trace::TraceLayer;
 use sqlx::postgres::PgPoolOptions;
-use std::env;
+use std::{env, sync::Arc};
 use tracing_subscriber;
 
 async fn health_check() -> &'static str {
@@ -71,6 +72,13 @@ async fn main() {
         Err(e) => println!("⚠️  Contract cleanup warning: {}", e),
     }
 
+    // Start background cleanup job for deleted users (30-day grace period)
+    let cleanup_pool = Arc::new(pool.clone());
+    tokio::spawn(async move {
+        cleanup::start_cleanup_job(cleanup_pool).await;
+    });
+    println!("🗑️  Started user deletion cleanup job (runs daily)");
+
     // Configure CORS
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -80,16 +88,18 @@ async fn main() {
     // Complete auth and subscription routes
     let auth_routes = Router::new()
         // Authentication endpoints
-        .route("/api/auth/register", post(simple_auth::register_handler))
-        .route("/api/auth/login", post(simple_auth::login_handler))
+        .route("/api/auth/link-user", post(simple_auth::link_user_handler))
+        .route("/api/auth/check-provider", post(simple_auth::check_provider_handler))
         .route("/api/auth/refresh", post(simple_auth::refresh_handler))
         .route("/api/auth/forgot-password", post(simple_auth::forgot_password_handler))
         .route("/api/auth/reset-password", post(simple_auth::reset_password_handler))
+        .route("/api/auth/request-email-verification", post(simple_auth::request_email_verification_handler))
         .route("/api/auth/verify-email", post(simple_auth::verify_email_handler))
         .route("/api/auth/logout", post(simple_auth::logout_handler))
         .route("/api/auth/user-status", get(simple_auth::user_status_handler))
-        // Trial endpoint
-        .route("/api/trial/start", post(simple_auth::start_trial_handler))
+        // Account deletion endpoints
+        .route("/api/auth/delete-account", post(simple_auth::request_delete_account_handler))
+        .route("/api/auth/restore-account", post(simple_auth::restore_account_handler))
         // Subscription endpoints
         .route("/api/subscription/create", post(simple_auth::create_subscription_handler))
         .route("/api/subscription/status", get(simple_auth::subscription_status_handler))
@@ -104,7 +114,7 @@ async fn main() {
             supabase_jwt_secret.clone(),
         ));
 
-    // Database and scraper routes (3-element state)
+    // Database and scraper routes (4-element state with Supabase JWT secret)
     let database_routes = Router::new()
         .route("/api/chats", get(database::get_chats_handler))
         .route("/api/chats", post(database::create_chat_handler))
@@ -115,13 +125,13 @@ async fn main() {
         .route("/api/messages/:message_id/feedback", post(database::submit_message_feedback_handler))
         .route("/api/law-content", post(scraper::fetch_law_content_handler))
         .route("/api/cached-law", post(database::get_cached_law_handler))
-        .with_state((pool.clone(), openrouter_api_key.clone(), jwt_secret.clone()));
+        .with_state((pool.clone(), openrouter_api_key.clone(), jwt_secret.clone(), supabase_jwt_secret.clone()));
 
-    // API routes that need OpenAI key (4-element state)
+    // API routes that need OpenAI key (5-element state with Supabase JWT secret)
     let api_routes = Router::new()
         .route("/api/question", post(api::ask_question_handler))
         .route("/api/transcribe", post(api::transcribe_audio_handler))
-        .with_state((pool, openrouter_api_key, openai_api_key, jwt_secret));
+        .with_state((pool, openrouter_api_key, openai_api_key, jwt_secret, supabase_jwt_secret));
 
     // Contract download route (no auth required - files are UUID-based)
     let contract_routes = Router::new()

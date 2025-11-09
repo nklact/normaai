@@ -46,10 +46,11 @@
 ## Technical Implementation Notes
 
 ### Database Schema
-- Uses existing `account_type` column with values: `trial_unregistered`, `trial_registered`, `individual`, `professional`, `team`
+- Uses existing `account_type` column with values: `trial_registered`, `individual`, `professional`, `team`, `premium`
 - Added `team_id` column for team management
 - Reuses existing `trial_messages_remaining` for message limits (renamed conceptually to `messages_remaining`)
 - Existing subscription fields handle billing for all plans
+- Note: Users must register first to start their free trial
 
 ### Plan Features Mapping
 - **Message Limits**: Trial (10), Individual (20/month), Professional/Team (unlimited)

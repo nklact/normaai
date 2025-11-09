@@ -8,7 +8,6 @@ use uuid::Uuid;
 use crate::models::*;
 use crate::database;
 use crate::scraper;
-use crate::simple_auth;
 use crate::laws;
 use sqlx::PgPool;
 
@@ -34,7 +33,7 @@ pub fn extract_client_ip(headers: &HeaderMap) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-type AppState = (PgPool, String, String, String); // (pool, openrouter_api_key, openai_api_key, jwt_secret)
+type AppState = (PgPool, String, String, String, Option<String>); // (pool, openrouter_api_key, openai_api_key, jwt_secret, supabase_jwt_secret)
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,7 +65,6 @@ async fn process_question_with_free_response(
     recent_messages: &[&Message],
     document_content: Option<&str>,
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
     api_key: &str,
 ) -> Result<String, String> {
@@ -85,7 +83,7 @@ async fn process_question_with_free_response(
     // Use the existing call_openrouter_api function for consistency
     println!("🔍 DEBUG: Making OpenRouter API call for free response...");
 
-    let llm_response = call_openrouter_api(api_key, messages, user_id, device_fingerprint, pool).await?;
+    let llm_response = call_openrouter_api(api_key, messages, user_id, pool).await?;
 
     println!("🤖 LLM FREE RESPONSE LENGTH: {} chars", llm_response.len());
     if llm_response.len() < 200 {
@@ -479,7 +477,7 @@ fn try_get_law_url(law_name: &str) -> Option<String> {
 
 
 pub async fn ask_question_handler(
-    State((pool, openrouter_api_key, _openai_api_key, jwt_secret)): State<AppState>,
+    State((pool, openrouter_api_key, _openai_api_key, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<QuestionRequest>,
 ) -> Result<ResponseJson<QuestionResponse>, StatusCode> {
@@ -503,34 +501,17 @@ pub async fn ask_question_handler(
     
     // Extract IP address from Fly.io headers (proper way for proxy environments)
     let client_ip = extract_client_ip(&headers);
-    
+
     println!("🔍 DEBUG: Client IP: {}", client_ip);
-    
-    // Check IP trial limits (max 3 trials per IP)
-    println!("🔍 DEBUG: Checking IP trial limits...");
-    match simple_auth::check_ip_trial_limits(&pool, &client_ip).await {
-        Ok(allowed) => {
-            println!("🔍 DEBUG: IP trial check result: allowed={}", allowed);
-            if !allowed {
-                println!("❌ DEBUG: IP trial limit exceeded");
-                // Return HTTP 429 with structured error in response body
-                return Err(StatusCode::TOO_MANY_REQUESTS);
-            }
-        }
-        Err(e) => {
-            println!("❌ DEBUG: IP trial check error: {:?}", e);
-            return Err(e.0);
-        }
-    }
-    
-    // Extract user info for usage tracking and limit checking
+
+    // Extract user info for usage tracking and limit checking with Supabase token support
     println!("🔍 DEBUG: Extracting user info...");
-    let (user_id, device_fingerprint) = database::extract_user_info(&headers, &jwt_secret);
-    println!("🔍 DEBUG: User info - user_id: {:?}, device_fingerprint: {:?}", user_id, device_fingerprint);
+    let user_id = database::verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool).await;
+    println!("🔍 DEBUG: User info - user_id: {:?}", user_id);
 
     // Validate document upload permission for Professional/Team/Premium users only
     if request.document_content.is_some() {
-        let user = database::get_user(user_id, device_fingerprint.clone(), &pool).await
+        let user = database::get_user(user_id, &pool).await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         if let Some(user) = user {
@@ -543,10 +524,10 @@ pub async fn ask_question_handler(
             return Err(StatusCode::FORBIDDEN);
         }
     }
-    
+
     // Check if user can send message (trial users need remaining messages, premium unlimited)
     println!("🔍 DEBUG: Checking if user can send message...");
-    match database::can_send_message(user_id, device_fingerprint.clone(), &pool).await {
+    match database::can_send_message(user_id, &pool).await {
         Ok(can_send) => {
             if !can_send {
                 println!("❌ DEBUG: User cannot send message - trial limit exceeded");
@@ -560,13 +541,12 @@ pub async fn ask_question_handler(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    
+
     // Process question with new free response system
     println!("🔍 DEBUG: Starting free response processing...");
     let enhanced_response = process_question_with_llm_guidance(
         &request,
         user_id,
-        device_fingerprint.clone(),
         &pool,
         &openrouter_api_key,
     ).await.map_err(|e| {
@@ -577,7 +557,7 @@ pub async fn ask_question_handler(
     println!("✅ DEBUG: Free response processing successful");
 
     // Decrement trial messages after successful message processing (skip for premium users)
-    let user = database::get_user(user_id, device_fingerprint.clone(), &pool).await
+    let user = database::get_user(user_id, &pool).await
         .map_err(|e| {
             eprintln!("Failed to get user for message decrement check: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
@@ -585,12 +565,11 @@ pub async fn ask_question_handler(
 
     if let Some(user) = user {
         if user.account_type != "premium" {
-            let device_fp_for_logging = device_fingerprint.clone();
-            if let Err(e) = database::decrement_trial_message(user_id, device_fingerprint, &pool).await {
+            if let Err(e) = database::decrement_trial_message(user_id, &pool).await {
                 // Log error but don't fail the request since AI response was successful
-                eprintln!("⚠️  CRITICAL: Failed to decrement trial messages for user_id={:?}, device_fingerprint={:?}: {}", user_id, device_fp_for_logging, e);
+                eprintln!("⚠️  CRITICAL: Failed to decrement trial messages for user_id={:?}: {}", user_id, e);
             } else {
-                println!("✅ DEBUG: Successfully decremented trial message count for user_id={:?}, device_fingerprint={:?}", user_id, device_fp_for_logging);
+                println!("✅ DEBUG: Successfully decremented trial message count for user_id={:?}", user_id);
             }
         } else {
             println!("✅ DEBUG: Premium user - skipping trial message decrement");
@@ -605,7 +584,6 @@ pub async fn ask_question_handler(
 async fn process_question_with_llm_guidance(
     request: &QuestionRequest,
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
     api_key: &str,
 ) -> Result<QuestionResponse, String> {
@@ -656,7 +634,6 @@ async fn process_question_with_llm_guidance(
             &recent_messages,
             request.document_content.as_deref(),
             user_id,
-            device_fingerprint.clone(),
             pool,
             api_key,
         ).await?
@@ -944,10 +921,9 @@ Nakon [CONTRACT_END] dodaj kratak komentar i preporuku za pravni pregled."#;
 }
 
 async fn call_openrouter_api(
-    api_key: &str, 
+    api_key: &str,
     messages: Vec<OpenRouterMessage>,
     user_id: Option<Uuid>,
-    device_fingerprint: Option<String>,
     pool: &PgPool,
 ) -> Result<String, String> {
     // Calculate input text length for cost estimation
@@ -956,9 +932,9 @@ async fn call_openrouter_api(
         .collect::<Vec<_>>()
         .join(" ");
     let input_chars = input_text.len();
-    
+
     let client = reqwest::Client::new();
-    
+
     let request = OpenRouterRequest {
         model: "google/gemini-2.5-pro".to_string(),
         messages,
@@ -995,9 +971,9 @@ async fn call_openrouter_api(
     // Track LLM cost
     let output_chars = response_content.len();
     let estimated_cost = database::estimate_llm_cost(input_chars, output_chars);
-    
+
     // Log cost tracking (don't fail the request if logging fails)
-    if let Err(e) = database::track_llm_cost(user_id, device_fingerprint, estimated_cost, pool).await {
+    if let Err(e) = database::track_llm_cost(user_id, estimated_cost, pool).await {
         eprintln!("Failed to track LLM cost: {}", e);
     }
 
@@ -1162,18 +1138,18 @@ pub struct TranscribeResponse {
 }
 
 pub async fn transcribe_audio_handler(
-    State((pool, _openrouter_api_key, openai_api_key, jwt_secret)): State<AppState>,
+    State((pool, _openrouter_api_key, openai_api_key, jwt_secret, supabase_jwt_secret)): State<AppState>,
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<ResponseJson<TranscribeResponse>, StatusCode> {
     println!("🎙️ ================== TRANSCRIPTION REQUEST ==================");
-    
-    // Extract user info for authorization
-    let (user_id, device_fingerprint) = database::extract_user_info(&headers, &jwt_secret);
-    println!("🔍 DEBUG: Transcription request - user_id: {:?}, device_fingerprint: {:?}", user_id, device_fingerprint);
-    
+
+    // Extract user info for authorization with Supabase token support
+    let user_id = database::verify_user_from_headers_async(&headers, &jwt_secret, supabase_jwt_secret.as_deref(), &pool).await;
+    println!("🔍 DEBUG: Transcription request - user_id: {:?}", user_id);
+
     // Check if user can send message (same limits as regular messages)
-    match database::can_send_message(user_id, device_fingerprint.clone(), &pool).await {
+    match database::can_send_message(user_id, &pool).await {
         Ok(can_send) => {
             if !can_send {
                 println!("❌ DEBUG: User cannot send message - trial limit exceeded");
