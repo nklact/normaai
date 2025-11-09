@@ -58,6 +58,38 @@ function createTauriStorage() {
   };
 }
 
+// Generate or retrieve persistent device session ID
+// This ID survives token refreshes but can be reset by user (clearing storage)
+async function getDeviceSessionId() {
+  const STORAGE_KEY = 'device_session_id';
+
+  if (isTauriApp) {
+    try {
+      const { Store } = await import('@tauri-apps/plugin-store');
+      const store = await Store.load('device.json');
+      let sessionId = await store.get(STORAGE_KEY);
+
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        await store.set(STORAGE_KEY, sessionId);
+        await store.save();
+      }
+      return sessionId;
+    } catch (error) {
+      console.error('Error managing device session ID:', error);
+      return crypto.randomUUID(); // Fallback to temporary ID
+    }
+  } else {
+    // Web - use localStorage
+    let sessionId = localStorage.getItem(STORAGE_KEY);
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem(STORAGE_KEY, sessionId);
+    }
+    return sessionId;
+  }
+}
+
 // Initialize Supabase client with PKCE flow for better mobile/desktop support
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -95,12 +127,16 @@ class ApiService {
   // ==================== INTERNAL METHODS ====================
 
   /**
-   * Get auth headers with Supabase session token
+   * Get auth headers with Supabase session token and device session ID
    */
   async getAuthHeaders() {
     const headers = {
       "Content-Type": "application/json",
     };
+
+    // Add device session ID for session deduplication
+    const deviceSessionId = await getDeviceSessionId();
+    headers["X-Device-Session-Id"] = deviceSessionId;
 
     // Get Supabase session
     const {

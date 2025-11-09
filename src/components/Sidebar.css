@@ -53,7 +53,8 @@
 .email-verification-banner {
   margin: 8px 0;
   padding: 12px;
-  background: var(--bg-primary);
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.2);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -80,21 +81,20 @@
 
 .resend-verification-btn {
   padding: 8px 12px;
-  background: none;
-  border: 1px solid var(--border-color);
+  background: var(--primary-color);
+  border: 1px solid var(--primary-color);
   border-radius: 6px;
   font-size: var(--text-xs);
   font-weight: 500;
-  color: var(--text-primary);
+  color: white;
   cursor: pointer;
   transition: all 0.2s ease;
   align-self: flex-start;
 }
 
 .resend-verification-btn:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .resend-verification-btn:disabled {

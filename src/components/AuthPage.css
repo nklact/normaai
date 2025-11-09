@@ -230,6 +230,19 @@ html[data-theme="dark"] .auth-page-logo.dark-logo {
   cursor: not-allowed;
 }
 
+/* Hide browser's native password reveal button */
+.auth-page-input[type="password"]::-ms-reveal,
+.auth-page-input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.auth-page-input[type="password"]::-webkit-credentials-auto-fill-button,
+.auth-page-input[type="password"]::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+
 .auth-page-password-wrapper {
   position: relative;
 }

@@ -30,7 +30,7 @@ const Modal = ({ isOpen, onClose, title, children, type = 'default', tabs = null
   }, [isOpen]);
 
   // Check if it's a full-screen modal type
-  const isFullScreenModal = ['auth', 'plan-selection', 'template-library'].includes(type);
+  const isFullScreenModal = ['auth', 'plan-selection', 'template-library', 'settings', 'confirm'].includes(type);
 
   return (
     <div className={`modal-overlay ${isOpen ? 'open' : ''}`} onClick={handleBackdropClick}>

@@ -37,7 +37,7 @@ const PasswordResetPage = () => {
       const hasSpecial = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?]/.test(password);
 
       if (!(hasUpper && hasLower && hasDigit && hasSpecial)) {
-        errors.password = 'Lozinka mora sadržavati velika i mala slova, broj i specijalni karakter';
+        errors.password = 'Lozinka mora sadržati velika i mala slova, broj i specijalni karakter';
       }
     }
 

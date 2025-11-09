@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import DeleteAccountModal from './DeleteAccountModal';
+import ConfirmDialog from './ConfirmDialog';
+import ErrorDialog from './ErrorDialog';
+import InfoDialog from './InfoDialog';
 import apiService from '../services/api';
 import './SettingsModal.css';
 
@@ -24,6 +27,11 @@ const SettingsModal = ({
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Dialog states
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', sessionId: null });
+  const [errorDialog, setErrorDialog] = useState({ isOpen: false, message: '' });
+  const [infoDialog, setInfoDialog] = useState({ isOpen: false, message: '' });
 
   const tabs = (
     <div className="settings-tabs">
@@ -81,30 +89,67 @@ const SettingsModal = ({
   };
 
   const handleRevokeSession = async (sessionId) => {
-    if (!confirm('Da li ste sigurni da želite da uklonite ovaj uređaj?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      type: 'revokeSession',
+      sessionId,
+      title: 'Ukloni uređaj',
+      message: 'Da li ste sigurni da želite da uklonite ovaj uređaj? Moraćete ponovo da se prijavite na njemu.'
+    });
+  };
 
+  const handleConfirmRevokeSession = async () => {
+    const sessionId = confirmDialog.sessionId;
     setRevokingSession(sessionId);
+
     try {
       await apiService.revokeSession(sessionId);
       setSessions(sessions.filter(s => s.id !== sessionId));
     } catch (error) {
       console.error('Failed to revoke session:', error);
-      alert('Greška prilikom uklanjanja uređaja');
+      setErrorDialog({
+        isOpen: true,
+        message: 'Greška prilikom uklanjanja uređaja. Molimo pokušajte ponovo.'
+      });
     } finally {
       setRevokingSession(null);
     }
   };
 
   const handleRevokeAllSessions = async () => {
-    if (!confirm('Da li ste sigurni da želite da se odjavite sa svih drugih uređaja?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      type: 'revokeAll',
+      title: 'Odjavi sve ostale uređaje',
+      message: 'Da li ste sigurni da želite da se odjavite sa svih drugih uređaja? Ova akcija ne može biti poništena.'
+    });
+  };
 
+  const handleConfirmRevokeAll = async () => {
     try {
       const result = await apiService.revokeAllSessions();
-      alert(result.message);
+      setInfoDialog({
+        isOpen: true,
+        message: result.message || 'Uspešno ste odjavljeni sa svih drugih uređaja.'
+      });
       loadSessions();
     } catch (error) {
       console.error('Failed to revoke all sessions:', error);
-      alert('Greška prilikom uklanjanja sesija');
+      setErrorDialog({
+        isOpen: true,
+        message: 'Greška prilikom uklanjanja sesija. Molimo pokušajte ponovo.'
+      });
+    }
+  };
+
+  const handleConfirmDialogAction = () => {
+    if (confirmDialog.type === 'revokeSession') {
+      handleConfirmRevokeSession();
+    } else if (confirmDialog.type === 'revokeAll') {
+      handleConfirmRevokeAll();
+    } else if (confirmDialog.type === 'logout') {
+      onClose();
+      window.location.reload();
     }
   };
 
@@ -130,7 +175,7 @@ const SettingsModal = ({
     const hasSpecial = /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(newPassword);
 
     if (!(hasUppercase && hasLowercase && hasNumber && hasSpecial)) {
-      setPasswordError('Lozinka mora sadržavati velika i mala slova, broj i specijalni karakter');
+      setPasswordError('Lozinka mora sadržati velika i mala slova, broj i specijalni karakter');
       return;
     }
 
@@ -369,7 +414,7 @@ const SettingsModal = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="Podešavanja" tabs={tabs}>
+      <Modal isOpen={isOpen} onClose={onClose} title="Podešavanja" tabs={tabs} type="settings">
         <div className="settings-content">
           {activeTab === 'account' && (
             <div className="settings-section">
@@ -382,7 +427,7 @@ const SettingsModal = ({
                 <div className="settings-info-item">
                   <span className="settings-label">Tip naloga:</span>
                   <span className="settings-value">
-                    {userStatus?.account_type === 'trial_registered' && 'Trial'}
+                    {userStatus?.account_type === 'trial_registered' && 'Probni period'}
                     {userStatus?.account_type === 'individual' && 'Individual'}
                     {userStatus?.account_type === 'professional' && 'Professional'}
                     {userStatus?.account_type === 'team' && 'Team'}
@@ -391,7 +436,7 @@ const SettingsModal = ({
                 </div>
                 {userStatus?.messages_remaining !== null && userStatus?.messages_remaining !== undefined && (
                   <div className="settings-info-item">
-                    <span className="settings-label">Preostale poruke:</span>
+                    <span className="settings-label">Preostalo poruka:</span>
                     <span className="settings-value">{userStatus?.messages_remaining}</span>
                   </div>
                 )}
@@ -432,10 +477,12 @@ const SettingsModal = ({
                     textDecoration: 'underline'
                   }}
                   onClick={() => {
-                    if (confirm('Da li ste sigurni da želite da se odjavite?')) {
-                      onClose();
-                      window.location.reload();
-                    }
+                    setConfirmDialog({
+                      isOpen: true,
+                      type: 'logout',
+                      title: 'Odjava',
+                      message: 'Da li ste sigurni da želite da se odjavite?'
+                    });
                   }}
                   onMouseEnter={(e) => e.target.style.color = 'var(--primary-color)'}
                   onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary)'}
@@ -537,7 +584,7 @@ const SettingsModal = ({
                   />
                 </div>
                 <div className="password-requirements">
-                  <p>Lozinka mora sadržavati:</p>
+                  <p>Lozinka mora sadržati:</p>
                   <ul>
                     <li>Najmanje 8 karaktera</li>
                     <li>Veliko i malo slovo</li>
@@ -589,6 +636,30 @@ const SettingsModal = ({
           onAccountDeleted();
         }}
         userStatus={userStatus}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ isOpen: false, type: '', sessionId: null })}
+        onConfirm={handleConfirmDialogAction}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Potvrdi"
+        cancelText="Otkaži"
+        type="danger"
+      />
+
+      <ErrorDialog
+        isOpen={errorDialog.isOpen}
+        onClose={() => setErrorDialog({ isOpen: false, message: '' })}
+        message={errorDialog.message}
+      />
+
+      <InfoDialog
+        isOpen={infoDialog.isOpen}
+        onClose={() => setInfoDialog({ isOpen: false, message: '' })}
+        title="Uspešno"
+        message={infoDialog.message}
       />
     </>
   );

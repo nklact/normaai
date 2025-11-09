@@ -316,14 +316,18 @@
   /* Full-screen modal types on mobile */
   .modal-overlay:has(.modal-content.auth),
   .modal-overlay:has(.modal-content.plan-selection),
-  .modal-overlay:has(.modal-content.template-library) {
+  .modal-overlay:has(.modal-content.template-library),
+  .modal-overlay:has(.modal-content.settings),
+  .modal-overlay:has(.modal-content.confirm) {
     align-items: stretch;
     justify-content: stretch;
   }
 
   .modal-content.auth,
   .modal-content.plan-selection,
-  .modal-content.template-library {
+  .modal-content.template-library,
+  .modal-content.settings,
+  .modal-content.confirm {
     width: 100%;
     height: 100vh; /* Fallback */
     height: 100dvh; /* Dynamic viewport height for mobile */
@@ -339,7 +343,9 @@
   /* Add safe area insets for iOS full-screen modals */
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
-  .modal-content.template-library .modal-header {
+  .modal-content.template-library .modal-header,
+  .modal-content.settings .modal-header,
+  .modal-content.confirm .modal-header {
     padding-top: max(20px, calc(env(safe-area-inset-top) + 12px));
     padding-right: 16px;
     padding-bottom: 16px;
@@ -348,7 +354,9 @@
 
   .modal-content.auth .modal-body,
   .modal-content.plan-selection .modal-body,
-  .modal-content.template-library .modal-body {
+  .modal-content.template-library .modal-body,
+  .modal-content.settings .modal-body,
+  .modal-content.confirm .modal-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -356,7 +364,9 @@
   /* Center modal titles on mobile for full-screen modals using grid */
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
-  .modal-content.template-library .modal-header {
+  .modal-content.template-library .modal-header,
+  .modal-content.settings .modal-header,
+  .modal-content.confirm .modal-header {
     display: grid;
     grid-template-columns: 40px 1fr 40px; /* Back button, title, spacer */
     grid-template-rows: auto; /* Single row */
@@ -367,7 +377,9 @@
   /* Title - middle column, first row */
   .modal-content.auth .modal-title,
   .modal-content.plan-selection .modal-title,
-  .modal-content.template-library .modal-title {
+  .modal-content.template-library .modal-title,
+  .modal-content.settings .modal-title,
+  .modal-content.confirm .modal-title {
     grid-column: 2;
     grid-row: 1;
     text-align: center;
@@ -376,7 +388,9 @@
   /* Back button - first column, first row */
   .modal-content.auth .modal-close-btn,
   .modal-content.plan-selection .modal-close-btn,
-  .modal-content.template-library .modal-close-btn {
+  .modal-content.template-library .modal-close-btn,
+  .modal-content.settings .modal-close-btn,
+  .modal-content.confirm .modal-close-btn {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
@@ -385,14 +399,18 @@
   /* Show back icon, hide X on mobile for full-screen modals */
   .modal-content.auth .modal-back-icon,
   .modal-content.plan-selection .modal-back-icon,
-  .modal-content.template-library .modal-back-icon {
+  .modal-content.template-library .modal-back-icon,
+  .modal-content.settings .modal-back-icon,
+  .modal-content.confirm .modal-back-icon {
     display: block;
     color: var(--text-primary);
   }
 
   .modal-content.auth .modal-close-x,
   .modal-content.plan-selection .modal-close-x,
-  .modal-content.template-library .modal-close-x {
+  .modal-content.template-library .modal-close-x,
+  .modal-content.settings .modal-close-x,
+  .modal-content.confirm .modal-close-x {
     display: none;
   }
 }

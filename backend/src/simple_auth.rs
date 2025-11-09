@@ -19,10 +19,14 @@ fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     let has_uppercase = password.chars().any(char::is_uppercase);
     let has_lowercase = password.chars().any(char::is_lowercase);
     let has_digit = password.chars().any(char::is_numeric);
-    let has_special = password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
+    let has_special = password
+        .chars()
+        .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c));
 
     if !(has_uppercase && has_lowercase && has_digit && has_special) {
-        return Err(ValidationError::new("Lozinka mora sadržavati velika i mala slova, broj i specijalni karakter"));
+        return Err(ValidationError::new(
+            "Lozinka mora sadržati velika i mala slova, broj i specijalni karakter",
+        ));
     }
     Ok(())
 }
@@ -244,13 +248,18 @@ pub async fn link_user_handler(
             })?;
 
     let supabase_user = supabase_user.ok_or_else(|| {
-        eprintln!("❌ Supabase user {} not found in auth.users table", supabase_user_id);
+        eprintln!(
+            "❌ Supabase user {} not found in auth.users table",
+            supabase_user_id
+        );
         (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
                 error: "USER_NOT_FOUND".to_string(),
                 message: "Supabase korisnik nije pronađen".to_string(),
-                details: Some(serde_json::json!({"supabase_user_id": supabase_user_id.to_string()})),
+                details: Some(
+                    serde_json::json!({"supabase_user_id": supabase_user_id.to_string()}),
+                ),
             }),
         )
     })?;
@@ -268,11 +277,12 @@ pub async fn link_user_handler(
         .and_then(|p| p.as_str());
     println!("🔍 DEBUG: provider from metadata = {:?}", provider_value);
 
-    let is_oauth = provider_value
-        .map(|p| p != "email")
-        .unwrap_or(false);
+    let is_oauth = provider_value.map(|p| p != "email").unwrap_or(false);
 
-    println!("🔍 DEBUG: is_oauth = {}, email_verified will be = {}", is_oauth, is_oauth);
+    println!(
+        "🔍 DEBUG: is_oauth = {}, email_verified will be = {}",
+        is_oauth, is_oauth
+    );
     let email_verified = is_oauth; // OAuth = verified, email/password = needs manual verification
 
     // Extract OAuth provider and profile info from metadata
@@ -384,6 +394,12 @@ pub async fn link_user_handler(
 
     // Create session for this login
     if let Some(ref token_str) = token {
+        // Extract device session ID from custom header
+        let device_session_id = headers
+            .get("X-Device-Session-Id")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
+
         // Extract device info from User-Agent header
         let user_agent = headers
             .get("User-Agent")
@@ -391,6 +407,7 @@ pub async fn link_user_handler(
             .map(|s| s.to_string());
 
         let device_info = user_agent.map(|ua| crate::sessions::DeviceInfo {
+            session_id: device_session_id,
             name: Some(ua.clone()),
             os: None,
             browser: None,
@@ -405,7 +422,15 @@ pub async fn link_user_handler(
             .and_then(|s| s.split(',').next())
             .and_then(|s| s.trim().parse::<std::net::IpAddr>().ok());
 
-        match crate::sessions::create_or_update_session(&pool, user_id, token_str, device_info, ip_address).await {
+        match crate::sessions::create_or_update_session(
+            &pool,
+            user_id,
+            token_str,
+            device_info,
+            ip_address,
+        )
+        .await
+        {
             Ok(session_id) => {
                 println!("✅ Session created/updated: {}", session_id);
             }
@@ -851,20 +876,29 @@ pub async fn request_email_verification_handler(
     let expires_at = chrono::Utc::now() + chrono::Duration::hours(24);
 
     // Store verification token
-    AuthenticationToken::create(&pool, user_id, "email_verification", token.clone(), expires_at)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
-                    message: "Greška kreiranja verifikacionog tokena".to_string(),
-                    details: Some(serde_json::json!({"details": e.to_string()})),
-                }),
-            )
-        })?;
+    AuthenticationToken::create(
+        &pool,
+        user_id,
+        "email_verification",
+        token.clone(),
+        expires_at,
+    )
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "DATABASE_ERROR".to_string(),
+                message: "Greška kreiranja verifikacionog tokena".to_string(),
+                details: Some(serde_json::json!({"details": e.to_string()})),
+            }),
+        )
+    })?;
 
-    println!("📧 Email verification token generated for {}: {}", user.email, token);
+    println!(
+        "📧 Email verification token generated for {}: {}",
+        user.email, token
+    );
 
     // Return token and email for frontend to send via EmailJS
     Ok(Json(VerificationEmailResponse {
@@ -1899,20 +1933,19 @@ pub async fn restore_account_handler(
         })?;
 
     // Get full user status
-    let user_status =
-        crate::database::get_user_status_optimized(Some(restored_user.id), &pool)
-            .await
-            .map_err(|e| {
-                eprintln!("Failed to get user status: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "STATUS_ERROR".to_string(),
-                        message: "Greška prilikom preuzimanja statusa korisnika".to_string(),
-                        details: Some(serde_json::json!({"details": e})),
-                    }),
-                )
-            })?;
+    let user_status = crate::database::get_user_status_optimized(Some(restored_user.id), &pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to get user status: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "STATUS_ERROR".to_string(),
+                    message: "Greška prilikom preuzimanja statusa korisnika".to_string(),
+                    details: Some(serde_json::json!({"details": e})),
+                }),
+            )
+        })?;
 
     // TODO: Send email notification about restoration
 
@@ -1982,7 +2015,8 @@ pub async fn get_sessions_handler(
     let response: Vec<SessionResponse> = sessions
         .into_iter()
         .map(|s| {
-            let device_name = s.device_info
+            let device_name = s
+                .device_info
                 .as_ref()
                 .and_then(|d| d.get("name"))
                 .and_then(|n| n.as_str())
@@ -1994,7 +2028,8 @@ pub async fn get_sessions_handler(
                 ip_address: s.ip_address.map(|ip| ip.to_string()),
                 created_at: s.created_at.to_rfc3339(),
                 last_seen_at: s.last_seen_at.to_rfc3339(),
-                is_current: current_token.as_ref() == Some(&crate::sessions::hash_token(&s.id.to_string())),
+                is_current: current_token.as_ref()
+                    == Some(&crate::sessions::hash_token(&s.id.to_string())),
             }
         })
         .collect();

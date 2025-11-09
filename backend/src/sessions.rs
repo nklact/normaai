@@ -8,9 +8,10 @@ const MAX_CONCURRENT_SESSIONS: i64 = 5;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceInfo {
-    pub name: Option<String>,      // "iPhone 14 Pro"
-    pub os: Option<String>,         // "iOS 17.2"
-    pub browser: Option<String>,    // "Safari"
+    pub session_id: Option<String>,  // Stable UUID per app instance (survives token refresh)
+    pub name: Option<String>,        // "iPhone 14 Pro"
+    pub os: Option<String>,          // "iOS 17.2"
+    pub browser: Option<String>,     // "Safari"
     pub app_version: Option<String>, // "1.0.0"
 }
 
@@ -44,7 +45,7 @@ pub async fn create_or_update_session(
 ) -> Result<Uuid, sqlx::Error> {
     let token_hash = hash_token(token);
     let expires_at = chrono::Utc::now() + chrono::Duration::hours(24 * 30); // 30 days
-    let device_info_json = device_info.map(|d| serde_json::to_value(d).ok()).flatten();
+    let device_info_json = device_info.as_ref().map(|d| serde_json::to_value(d).ok()).flatten();
 
     // Check if session already exists (same token)
     let existing_session: Option<(Uuid,)> = sqlx::query_as(
@@ -55,15 +56,67 @@ pub async fn create_or_update_session(
     .await?;
 
     if let Some((session_id,)) = existing_session {
-        // Update existing session's last_seen_at
+        // Update existing session's last_seen_at and device info
         sqlx::query(
-            "UPDATE user_sessions SET last_seen_at = NOW() WHERE id = $1"
+            "UPDATE user_sessions
+             SET last_seen_at = NOW(),
+                 device_info = $1,
+                 ip_address = $2
+             WHERE id = $3"
         )
+        .bind(&device_info_json)
+        .bind(ip_address)
         .bind(session_id)
         .execute(pool)
         .await?;
 
         return Ok(session_id);
+    }
+
+    // Token not found - check if this is a token refresh from same device
+    // Match by device session_id (stable across token refreshes)
+    if let Some(ref device_json) = device_info_json {
+        // Extract session_id from device_info JSON
+        let device_session_id = device_json
+            .get("session_id")
+            .and_then(|v| v.as_str());
+
+        if let Some(session_id_str) = device_session_id {
+            // Try to find existing session by session_id
+            let existing_device_session: Option<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM user_sessions
+                 WHERE user_id = $1
+                   AND device_info->>'session_id' = $2
+                   AND revoked = false
+                   AND expires_at > NOW()
+                 ORDER BY last_seen_at DESC
+                 LIMIT 1"
+            )
+            .bind(user_id)
+            .bind(session_id_str)
+            .fetch_optional(pool)
+            .await?;
+
+            if let Some((session_id,)) = existing_device_session {
+                // Update existing device session with new token (token refresh scenario)
+                sqlx::query(
+                    "UPDATE user_sessions
+                     SET session_token_hash = $1,
+                         last_seen_at = NOW(),
+                         expires_at = $2,
+                         device_info = $3
+                     WHERE id = $4"
+                )
+                .bind(&token_hash)
+                .bind(expires_at)
+                .bind(device_json)
+                .bind(session_id)
+                .execute(pool)
+                .await?;
+
+                return Ok(session_id);
+            }
+        }
     }
 
     // Enforce concurrent session limit

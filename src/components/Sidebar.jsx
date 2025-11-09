@@ -390,7 +390,7 @@ const Sidebar = ({
           {!userStatus.email_verified && (
             <div className="email-verification-banner">
               <div className="verification-content">
-                <div className="verification-title">Verifikujte email adresu</div>
+                <div className="verification-title">Potvrdite email adresu</div>
                 <div className="verification-text">Proverite inbox za link za verifikaciju.</div>
               </div>
               <button
