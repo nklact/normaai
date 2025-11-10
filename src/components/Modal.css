@@ -110,7 +110,7 @@
 }
 
 .modal-content.confirm .modal-title {
-  color: var(--danger-color);
+  color: var(--text-primary);
 }
 
 .confirm-message {
@@ -150,16 +150,28 @@
   border-color: var(--border-hover);
 }
 
-.confirm-btn.delete {
+.confirm-btn.cancel:active {
+  transform: scale(0.98);
+}
+
+.confirm-btn.delete,
+.confirm-btn.danger {
   background-color: var(--danger-color);
   color: white;
 }
 
-.confirm-btn.delete:hover:not(:disabled) {
+.confirm-btn.delete:hover:not(:disabled),
+.confirm-btn.danger:hover:not(:disabled) {
   background-color: #b91c1c;
 }
 
-.confirm-btn.delete:disabled {
+.confirm-btn.delete:active:not(:disabled),
+.confirm-btn.danger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.confirm-btn.delete:disabled,
+.confirm-btn.danger:disabled {
   background-color: #d1d5db;
   color: #9ca3af;
   cursor: not-allowed;
@@ -317,8 +329,7 @@
   .modal-overlay:has(.modal-content.auth),
   .modal-overlay:has(.modal-content.plan-selection),
   .modal-overlay:has(.modal-content.template-library),
-  .modal-overlay:has(.modal-content.settings),
-  .modal-overlay:has(.modal-content.confirm) {
+  .modal-overlay:has(.modal-content.settings) {
     align-items: stretch;
     justify-content: stretch;
   }
@@ -326,8 +337,7 @@
   .modal-content.auth,
   .modal-content.plan-selection,
   .modal-content.template-library,
-  .modal-content.settings,
-  .modal-content.confirm {
+  .modal-content.settings {
     width: 100%;
     height: 100vh; /* Fallback */
     height: 100dvh; /* Dynamic viewport height for mobile */
@@ -340,12 +350,20 @@
     margin: 0;
   }
 
+  /* Confirmation dialog - iOS/Android popup style on mobile */
+
+  .modal-content.confirm {
+    width: 85%;
+    max-width: 320px;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  }
+
   /* Add safe area insets for iOS full-screen modals */
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
   .modal-content.template-library .modal-header,
-  .modal-content.settings .modal-header,
-  .modal-content.confirm .modal-header {
+  .modal-content.settings .modal-header {
     padding-top: max(20px, calc(env(safe-area-inset-top) + 12px));
     padding-right: 16px;
     padding-bottom: 16px;
@@ -355,8 +373,7 @@
   .modal-content.auth .modal-body,
   .modal-content.plan-selection .modal-body,
   .modal-content.template-library .modal-body,
-  .modal-content.settings .modal-body,
-  .modal-content.confirm .modal-body {
+  .modal-content.settings .modal-body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -365,8 +382,7 @@
   .modal-content.auth .modal-header,
   .modal-content.plan-selection .modal-header,
   .modal-content.template-library .modal-header,
-  .modal-content.settings .modal-header,
-  .modal-content.confirm .modal-header {
+  .modal-content.settings .modal-header {
     display: grid;
     grid-template-columns: 40px 1fr 40px; /* Back button, title, spacer */
     grid-template-rows: auto; /* Single row */
@@ -378,8 +394,7 @@
   .modal-content.auth .modal-title,
   .modal-content.plan-selection .modal-title,
   .modal-content.template-library .modal-title,
-  .modal-content.settings .modal-title,
-  .modal-content.confirm .modal-title {
+  .modal-content.settings .modal-title {
     grid-column: 2;
     grid-row: 1;
     text-align: center;
@@ -389,8 +404,7 @@
   .modal-content.auth .modal-close-btn,
   .modal-content.plan-selection .modal-close-btn,
   .modal-content.template-library .modal-close-btn,
-  .modal-content.settings .modal-close-btn,
-  .modal-content.confirm .modal-close-btn {
+  .modal-content.settings .modal-close-btn {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
@@ -400,8 +414,7 @@
   .modal-content.auth .modal-back-icon,
   .modal-content.plan-selection .modal-back-icon,
   .modal-content.template-library .modal-back-icon,
-  .modal-content.settings .modal-back-icon,
-  .modal-content.confirm .modal-back-icon {
+  .modal-content.settings .modal-back-icon {
     display: block;
     color: var(--text-primary);
   }
@@ -409,9 +422,27 @@
   .modal-content.auth .modal-close-x,
   .modal-content.plan-selection .modal-close-x,
   .modal-content.template-library .modal-close-x,
-  .modal-content.settings .modal-close-x,
-  .modal-content.confirm .modal-close-x {
+  .modal-content.settings .modal-close-x {
     display: none;
+  }
+
+  /* Confirmation dialog - keep standard desktop layout on mobile */
+  .modal-content.confirm .modal-header {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .modal-content.confirm .modal-title {
+    text-align: left;
+  }
+
+  .modal-content.confirm .confirm-actions {
+    justify-content: stretch;
+  }
+
+  .modal-content.confirm .confirm-btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 

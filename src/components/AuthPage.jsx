@@ -532,7 +532,7 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
             {/* Terms and Privacy notice */}
             {authMode !== 'forgot' && (
               <div className="auth-page-terms">
-                Nastavljanjem, prihvatate naše{' '}
+                Nastavljanjem prihvatate naše{' '}
                 <a href="https://normaai.rs/uslovi.html" target="_blank" rel="noopener noreferrer">
                   Uslove korišćenja
                 </a>
