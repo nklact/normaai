@@ -5,6 +5,10 @@ mod webview_helper;
 #[cfg(target_os = "ios")]
 use tauri::Manager;
 
+// iOS WebView extension trait for process termination handling
+#[cfg(target_os = "ios")]
+use tauri::webview::WebviewWindowExt;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -58,6 +62,31 @@ pub fn run() {
                     });
 
                     println!("✅ iOS WebView inspector enabled");
+
+                    // Handle WebView content process termination (iOS background kill fix)
+                    // When iOS kills the WebContent process (e.g., after long backgrounding),
+                    // we need to reload the page to restore functionality
+                    // This is a workaround until Tauri PR #14325 is merged
+                    let webview_clone = webview_window.clone();
+                    std::thread::spawn(move || {
+                        loop {
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+
+                            // Try to evaluate JavaScript to check if webview is alive
+                            match webview_clone.eval("window.__TAURI_ALIVE__ = true; 'ok'") {
+                                Ok(_) => {
+                                    // WebView is responsive
+                                }
+                                Err(_) => {
+                                    // WebView is unresponsive - try to reload
+                                    println!("⚠️ iOS WebView unresponsive, attempting reload...");
+                                    let _ = webview_clone.eval("window.location.reload()");
+                                }
+                            }
+                        }
+                    });
+
+                    println!("✅ iOS WebView health monitoring enabled");
                 }
             }
             Ok(())

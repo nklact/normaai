@@ -2113,7 +2113,7 @@ checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
 
 [[package]]
 name = "norma-ai"
-version = "0.4.23"
+version = "0.4.25"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.3",
@@ -5413,8 +5413,7 @@ checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
 [[package]]
 name = "wry"
 version = "0.53.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728b7d4c8ec8d81cab295e0b5b8a4c263c0d41a785fb8f8c4df284e5411140a2"
+source = "git+https://github.com/tauri-apps/wry?branch=dev#5fdd1a9840e24ce77ea4a57ce3746c3dbee28c9c"
 dependencies = [
  "base64 0.22.1",
  "block2 0.6.2",

@@ -1,6 +1,6 @@
 [package]
 name = "norma-ai"
-version = "0.4.24"
+version = "0.4.25"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -44,5 +44,11 @@ objc2-core-foundation = { version = "0.3" }
 objc2-foundation = { version = "0.3" }
 objc2-ui-kit = { version = "0.3" }
 block2 = { version = "0.6" }
+
+# Patch wry to use version with iOS WebView process termination fix
+# This fixes the blank screen issue when iOS kills the WebContent process
+# PR: https://github.com/tauri-apps/wry/pull/1624
+[patch.crates-io]
+wry = { git = "https://github.com/tauri-apps/wry", branch = "dev" }
 
 
