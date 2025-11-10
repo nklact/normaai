@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Pool, Postgres};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 const MAX_CONCURRENT_SESSIONS: i64 = 5;
@@ -119,6 +120,9 @@ pub async fn create_or_update_session(
         }
     }
 
+    // Clean up stale sessions first to avoid hitting limit with expired sessions
+    cleanup_user_sessions(pool, user_id).await?;
+
     // Enforce concurrent session limit
     let active_sessions_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM user_sessions
@@ -129,13 +133,20 @@ pub async fn create_or_update_session(
     .await?;
 
     if active_sessions_count >= MAX_CONCURRENT_SESSIONS {
+        warn!(
+            user_id = %user_id,
+            active_sessions = active_sessions_count,
+            max_sessions = MAX_CONCURRENT_SESSIONS,
+            "Session limit reached, revoking oldest session"
+        );
+
         // Revoke oldest session
         sqlx::query(
             "UPDATE user_sessions
              SET revoked = true
              WHERE id = (
                  SELECT id FROM user_sessions
-                 WHERE user_id = $1 AND revoked = false
+                 WHERE user_id = $1 AND revoked = false AND expires_at > NOW()
                  ORDER BY last_seen_at ASC
                  LIMIT 1
              )"
@@ -164,36 +175,117 @@ pub async fn create_or_update_session(
 
 /// Validate that a session is active (not revoked, not expired)
 /// Also updates last_seen_at timestamp
+///
+/// Returns:
+/// - Ok(Some(session_id)) if session found and valid
+/// - Ok(None) if session not found or invalid
+/// - Err(e) on database errors
 pub async fn validate_session(
     pool: &Pool<Postgres>,
     token: &str,
-) -> Result<bool, sqlx::Error> {
+) -> Result<Option<Uuid>, sqlx::Error> {
     let token_hash = hash_token(token);
 
-    let is_valid: Option<bool> = sqlx::query_scalar(
-        "SELECT EXISTS(
-            SELECT 1 FROM user_sessions
-            WHERE session_token_hash = $1
-              AND revoked = false
-              AND expires_at > NOW()
-        )"
+    // Try to find and update the session atomically
+    let session_id: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE user_sessions
+         SET last_seen_at = NOW()
+         WHERE session_token_hash = $1
+           AND revoked = false
+           AND expires_at > NOW()
+         RETURNING id"
     )
     .bind(&token_hash)
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await?;
 
-    if is_valid == Some(true) {
-        // Update last_seen_at
-        sqlx::query(
-            "UPDATE user_sessions SET last_seen_at = NOW() WHERE session_token_hash = $1"
+    if let Some(id) = session_id {
+        info!(session_id = %id, token_hash_prefix = &token_hash[..16], "Session validated");
+        Ok(Some(id))
+    } else {
+        warn!(token_hash_prefix = &token_hash[..16], "Session not found or expired");
+        Ok(None)
+    }
+}
+
+/// Update an existing session with a new token (for token refresh scenarios)
+/// This should be called when validation fails but we have a valid JWT
+///
+/// Returns:
+/// - Ok(Some(session_id)) if session was found and updated
+/// - Ok(None) if no active session exists for this user
+/// - Err(e) on database errors
+pub async fn update_session_token(
+    pool: &Pool<Postgres>,
+    user_id: Uuid,
+    new_token: &str,
+    device_session_id: Option<&str>,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    let new_token_hash = hash_token(new_token);
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(24 * 30); // 30 days
+
+    // Strategy: Find the most recent active session for this user and update it
+    // Priority: device_session_id match > most recent session
+    let session_id: Option<Uuid> = if let Some(device_id) = device_session_id {
+        // Try to find session by device_session_id first (most accurate)
+        info!(user_id = %user_id, device_session_id = device_id, "Attempting to update session by device_session_id");
+
+        sqlx::query_scalar(
+            "UPDATE user_sessions
+             SET session_token_hash = $1,
+                 last_seen_at = NOW(),
+                 expires_at = $2
+             WHERE user_id = $3
+               AND device_info->>'session_id' = $4
+               AND revoked = false
+               AND expires_at > NOW()
+             RETURNING id"
         )
-        .bind(&token_hash)
-        .execute(pool)
+        .bind(&new_token_hash)
+        .bind(expires_at)
+        .bind(user_id)
+        .bind(device_id)
+        .fetch_optional(pool)
+        .await?
+    } else {
+        None
+    };
+
+    // If device_session_id match failed or wasn't provided, fall back to most recent session
+    if session_id.is_none() {
+        info!(user_id = %user_id, "Updating most recent active session (fallback)");
+
+        let fallback_session_id: Option<Uuid> = sqlx::query_scalar(
+            "UPDATE user_sessions
+             SET session_token_hash = $1,
+                 last_seen_at = NOW(),
+                 expires_at = $2
+             WHERE id = (
+                 SELECT id FROM user_sessions
+                 WHERE user_id = $3
+                   AND revoked = false
+                   AND expires_at > NOW()
+                 ORDER BY last_seen_at DESC
+                 LIMIT 1
+             )
+             RETURNING id"
+        )
+        .bind(&new_token_hash)
+        .bind(expires_at)
+        .bind(user_id)
+        .fetch_optional(pool)
         .await?;
 
-        Ok(true)
+        if let Some(id) = fallback_session_id {
+            info!(user_id = %user_id, session_id = %id, "Session token updated via fallback");
+            Ok(Some(id))
+        } else {
+            warn!(user_id = %user_id, "No active session found to update");
+            Ok(None)
+        }
     } else {
-        Ok(false)
+        info!(user_id = %user_id, session_id = ?session_id, "Session token updated via device_session_id");
+        Ok(session_id)
     }
 }
 
@@ -262,13 +354,43 @@ pub async fn revoke_all_sessions(
 }
 
 /// Clean up expired and revoked sessions (should be run periodically)
+/// Returns the number of sessions deleted
 pub async fn cleanup_sessions(pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "DELETE FROM user_sessions
-         WHERE expires_at < NOW() OR (revoked = true AND last_seen_at < NOW() - INTERVAL '7 days')"
+         WHERE expires_at < NOW()
+            OR (revoked = true AND last_seen_at < NOW() - INTERVAL '7 days')
+            OR (revoked = false AND last_seen_at < NOW() - INTERVAL '90 days')"
     )
     .execute(pool)
     .await?;
 
-    Ok(result.rows_affected())
+    let deleted_count = result.rows_affected();
+    if deleted_count > 0 {
+        info!(sessions_deleted = deleted_count, "Cleaned up expired/stale sessions");
+    }
+
+    Ok(deleted_count)
+}
+
+/// Cleanup stale sessions for a specific user
+/// This helps prevent hitting the concurrent session limit with expired sessions
+pub async fn cleanup_user_sessions(pool: &Pool<Postgres>, user_id: Uuid) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "DELETE FROM user_sessions
+         WHERE user_id = $1
+           AND (expires_at < NOW()
+                OR (revoked = true AND last_seen_at < NOW() - INTERVAL '7 days')
+                OR (revoked = false AND last_seen_at < NOW() - INTERVAL '90 days'))"
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    let deleted_count = result.rows_affected();
+    if deleted_count > 0 {
+        info!(user_id = %user_id, sessions_deleted = deleted_count, "Cleaned up stale sessions for user");
+    }
+
+    Ok(deleted_count)
 }

@@ -406,12 +406,65 @@ pub async fn link_user_handler(
             .and_then(|h| h.to_str().ok())
             .map(|s| s.to_string());
 
-        let device_info = user_agent.map(|ua| crate::sessions::DeviceInfo {
+        // Parse User-Agent to extract OS and browser info
+        let (device_name, os, browser) = if let Some(ref ua) = user_agent {
+            let os = if ua.contains("Windows") {
+                Some("Windows".to_string())
+            } else if ua.contains("Macintosh") || ua.contains("Mac OS") {
+                Some("macOS".to_string())
+            } else if ua.contains("Linux") {
+                Some("Linux".to_string())
+            } else if ua.contains("Android") {
+                Some("Android".to_string())
+            } else if ua.contains("iPhone") || ua.contains("iPad") {
+                Some("iOS".to_string())
+            } else {
+                None
+            };
+
+            let browser = if ua.contains("Edg/") {
+                Some("Edge".to_string())
+            } else if ua.contains("Chrome/") {
+                Some("Chrome".to_string())
+            } else if ua.contains("Safari/") && !ua.contains("Chrome") {
+                Some("Safari".to_string())
+            } else if ua.contains("Firefox/") {
+                Some("Firefox".to_string())
+            } else if ua.contains("Tauri") {
+                Some("Norma AI Desktop".to_string())
+            } else {
+                Some("Unknown".to_string())
+            };
+
+            let device_name = if ua.contains("Tauri") {
+                if os.as_deref() == Some("Windows") {
+                    "Norma AI (Windows)"
+                } else if os.as_deref() == Some("macOS") {
+                    "Norma AI (macOS)"
+                } else if os.as_deref() == Some("Linux") {
+                    "Norma AI (Linux)"
+                } else {
+                    "Norma AI Desktop"
+                }
+            } else if os.as_deref() == Some("iOS") {
+                "iPhone/iPad"
+            } else if os.as_deref() == Some("Android") {
+                "Android"
+            } else {
+                "Web Browser"
+            };
+
+            (Some(device_name.to_string()), os, browser)
+        } else {
+            (Some("Unknown Device".to_string()), None, None)
+        };
+
+        let device_info = Some(crate::sessions::DeviceInfo {
             session_id: device_session_id,
-            name: Some(ua.clone()),
-            os: None,
-            browser: None,
-            app_version: None,
+            name: device_name,
+            os,
+            browser,
+            app_version: None, // TODO: Extract from custom header if needed
         });
 
         // Get IP address from X-Forwarded-For or X-Real-IP header (behind proxy)
@@ -432,7 +485,7 @@ pub async fn link_user_handler(
         .await
         {
             Ok(session_id) => {
-                println!("✅ Session created/updated: {}", session_id);
+                println!("✅ Session created/updated: {} for user {}", session_id, user_id);
             }
             Err(e) => {
                 eprintln!("⚠️ Failed to create session (non-fatal): {}", e);

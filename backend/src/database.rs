@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 type AppState = (PgPool, String, String, Option<String>); // (pool, api_key, jwt_secret, supabase_jwt_secret)
@@ -23,20 +24,84 @@ pub async fn verify_user_from_headers_async(
         .and_then(|auth_header| auth_header.to_str().ok())
         .and_then(|auth_str| auth_str.strip_prefix("Bearer "))?;
 
-    // Verify the JWT token first
-    let user_id = verify_any_token(token, jwt_secret, supabase_jwt_secret, pool)
-        .await
-        .ok()?;
+    // Verify the JWT token first (validates signature and expiration)
+    let user_id = match verify_any_token(token, jwt_secret, supabase_jwt_secret, pool).await {
+        Ok(id) => {
+            info!(user_id = %id, "JWT verified successfully");
+            id
+        }
+        Err(e) => {
+            warn!(error = %e, "JWT verification failed");
+            return None;
+        }
+    };
+
+    // Extract device_session_id from headers for logging
+    let device_session_id = headers
+        .get("X-Device-Session-Id")
+        .and_then(|h| h.to_str().ok());
 
     // Validate session is not revoked
     match crate::sessions::validate_session(pool, token).await {
-        Ok(true) => Some(user_id),
-        Ok(false) => {
-            eprintln!("⚠️ Session revoked for user {}", user_id);
-            None
+        Ok(Some(session_id)) => {
+            // Session found and valid
+            info!(
+                user_id = %user_id,
+                session_id = %session_id,
+                device_session_id = ?device_session_id,
+                "Session validated successfully"
+            );
+            Some(user_id)
+        }
+        Ok(None) => {
+            // Session not found - this could be a token refresh scenario
+            warn!(
+                user_id = %user_id,
+                device_session_id = ?device_session_id,
+                "Session not found - attempting token refresh update"
+            );
+
+            // Try to update existing session with new token
+            match crate::sessions::update_session_token(pool, user_id, token, device_session_id).await {
+                Ok(Some(session_id)) => {
+                    info!(
+                        user_id = %user_id,
+                        session_id = %session_id,
+                        device_session_id = ?device_session_id,
+                        "Session token updated after refresh"
+                    );
+                    Some(user_id)
+                }
+                Ok(None) => {
+                    // No session exists - this shouldn't happen if user was logged in
+                    // Could indicate session was revoked or expired
+                    error!(
+                        user_id = %user_id,
+                        device_session_id = ?device_session_id,
+                        "No active session found - authentication failed"
+                    );
+                    None
+                }
+                Err(e) => {
+                    error!(
+                        user_id = %user_id,
+                        device_session_id = ?device_session_id,
+                        error = %e,
+                        "Session token update error - allowing request (graceful degradation)"
+                    );
+                    // On error, allow the request to proceed (graceful degradation)
+                    // This prevents session table issues from breaking authentication
+                    Some(user_id)
+                }
+            }
         }
         Err(e) => {
-            eprintln!("⚠️ Session validation error (allowing request): {}", e);
+            error!(
+                user_id = %user_id,
+                device_session_id = ?device_session_id,
+                error = %e,
+                "Session validation error - allowing request (graceful degradation)"
+            );
             // On error, allow the request to proceed (graceful degradation)
             // This prevents session table issues from breaking authentication
             Some(user_id)
