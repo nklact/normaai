@@ -97,6 +97,7 @@ async fn main() {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
+            axum::http::header::HeaderName::from_static("x-device-session-id"), // Custom header for session deduplication
         ])
         .allow_credentials(true); // Required for Authorization header support
 

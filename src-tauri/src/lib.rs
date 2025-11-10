@@ -10,13 +10,12 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-// Note: Device ID retrieval is now handled by tauri-plugin-machine-uid
-// The plugin provides getMachineUid() command that works across all platforms:
-// - Windows: WMI system UUID
-// - macOS: IOKit system UUID
-// - Linux: D-Bus machine ID
-// - iOS: UIDevice's identifierForVendor
-// - Android: Settings.Secure.ANDROID_ID
+// Note: Device session ID is generated client-side using crypto.randomUUID()
+// and stored persistently in:
+// - Desktop/Mobile: Tauri Store (device.json)
+// - Web: localStorage
+// This approach is privacy-friendly and works across all platforms without
+// requiring access to hardware identifiers.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,16 +26,14 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_oauth::init()) // OAuth for desktop (localhost callback)
-        .plugin(tauri_plugin_machine_uid::init());
+        .plugin(tauri_plugin_oauth::init()); // OAuth for desktop (localhost callback)
 
     // Mobile-specific plugins (no updater or process)
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile (custom URL schemes)
-        .plugin(tauri_plugin_machine_uid::init());
+        .plugin(tauri_plugin_web_auth::init()); // OAuth for mobile (custom URL schemes)
 
     builder
         .setup(|_app| {

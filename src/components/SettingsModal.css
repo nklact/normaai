@@ -40,7 +40,6 @@
 }
 
 .settings-section h4 {
-  margin: 0 0 16px 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
@@ -50,6 +49,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 16px;
 }
 
 .settings-info-group {
@@ -312,8 +312,8 @@
   }
 
   .settings-section-header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 12px;
   }
 

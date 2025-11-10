@@ -20,8 +20,6 @@
     "store:allow-delete",
     "store:allow-has",
     "store:allow-load",
-    "store:allow-save",
-    "machine-uid:default",
-    "machine-uid:allow-get-machine-uid"
+    "store:allow-save"
   ]
 }

@@ -89,21 +89,39 @@ const SettingsModal = ({
   };
 
   const handleRevokeSession = async (sessionId) => {
+    const session = sessions.find(s => s.id === sessionId);
+    const isCurrentSession = session?.is_current;
+
     setConfirmDialog({
       isOpen: true,
       type: 'revokeSession',
       sessionId,
-      title: 'Ukloni uređaj',
-      message: 'Da li ste sigurni da želite da uklonite ovaj uređaj? Moraćete ponovo da se prijavite na njemu.'
+      title: isCurrentSession ? 'Odjavi se sa ovog uređaja' : 'Ukloni uređaj',
+      message: isCurrentSession
+        ? 'Da li ste sigurni da želite da se odjavite? Bićete vraćeni na stranicu za prijavu.'
+        : 'Da li ste sigurni da želite da uklonite ovaj uređaj? Moraćete ponovo da se prijavite na njemu.'
     });
   };
 
   const handleConfirmRevokeSession = async () => {
     const sessionId = confirmDialog.sessionId;
+    const isCurrentSession = sessions.find(s => s.id === sessionId)?.is_current;
     setRevokingSession(sessionId);
 
     try {
       await apiService.revokeSession(sessionId);
+
+      // If user revoked their current session, immediately logout
+      if (isCurrentSession) {
+        console.log('🔓 Current session revoked - logging out immediately');
+        await apiService.logout();
+        // Close modal and reload to show login screen
+        onClose();
+        window.location.reload();
+        return;
+      }
+
+      // Otherwise, just remove from list
       setSessions(sessions.filter(s => s.id !== sessionId));
     } catch (error) {
       console.error('Failed to revoke session:', error);
@@ -142,12 +160,25 @@ const SettingsModal = ({
     }
   };
 
-  const handleConfirmDialogAction = () => {
+  const handleConfirmDialogAction = async () => {
     if (confirmDialog.type === 'revokeSession') {
       handleConfirmRevokeSession();
     } else if (confirmDialog.type === 'revokeAll') {
       handleConfirmRevokeAll();
     } else if (confirmDialog.type === 'logout') {
+      await handleLogout();
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      console.log('🔓 Logging out...');
+      await apiService.logout();
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Even if logout fails, close modal and reload
       onClose();
       window.location.reload();
     }
@@ -418,7 +449,9 @@ const SettingsModal = ({
         <div className="settings-content">
           {activeTab === 'account' && (
             <div className="settings-section">
-              <h4>Informacije o nalogu</h4>
+              <div className="settings-section-header">
+                <h4>Informacije o nalogu</h4>
+              </div>
               <div className="settings-info-group">
                 <div className="settings-info-item">
                   <span className="settings-label">Email:</span>
@@ -442,7 +475,9 @@ const SettingsModal = ({
                 )}
               </div>
 
-              <h4>Upravljanje nalogom</h4>
+              <div className="settings-section-header">
+                <h4>Upravljanje nalogom</h4>
+              </div>
               <div className="settings-actions">
                 {userStatus?.account_type === 'trial_registered' && (
                   <button
@@ -557,7 +592,9 @@ const SettingsModal = ({
 
           {activeTab === 'security' && (
             <div className="settings-section">
-              <h4>Promena lozinke</h4>
+              <div className="settings-section-header">
+                <h4>Promena lozinke</h4>
+              </div>
               <form onSubmit={handleChangePassword} className="password-change-form">
                 <div className="form-group">
                   <label htmlFor="newPassword">Nova lozinka</label>
@@ -607,7 +644,9 @@ const SettingsModal = ({
 
           {activeTab === 'danger' && (
             <div className="settings-section">
-              <h4>Opasna zona</h4>
+              <div className="settings-section-header">
+                <h4>Opasna zona</h4>
+              </div>
               <div className="settings-info-group">
                 <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                   Brisanje naloga će onemogućiti pristup svim funkcijama i otkazati aktivne pretplate.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icons';
 import apiService from '../services/api';
 import logo from '../assets/logo.svg';
@@ -27,6 +27,9 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Refs for auto-focus
+  const passwordInputRef = useRef(null);
+
   // Set initial mode based on initialTab prop
   useEffect(() => {
     if (initialTab === 'forgot') {
@@ -35,6 +38,16 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
       setAuthMode('email');
     }
   }, [initialTab]);
+
+  // Auto-focus password field when it appears (after email is checked)
+  useEffect(() => {
+    if (emailChecked && (authMode === 'login' || authMode === 'register') && passwordInputRef.current) {
+      // Small delay to ensure the input is rendered and visible
+      setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 100);
+    }
+  }, [emailChecked, authMode]);
 
   // Carousel slides
   const slides = [
@@ -445,6 +458,7 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
                 <label htmlFor="password" className="auth-page-label">Lozinka</label>
                 <div className="auth-page-password-wrapper">
                   <input
+                    ref={passwordInputRef}
                     id="password"
                     type={showPassword ? "text" : "password"}
                     className={`auth-page-input ${fieldErrors.password ? 'error' : ''}`}

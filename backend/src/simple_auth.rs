@@ -1992,7 +1992,7 @@ pub async fn get_sessions_handler(
     })?;
 
     // Get current token hash to mark the current session
-    let current_token = headers
+    let current_token_hash = headers
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
@@ -2012,6 +2012,20 @@ pub async fn get_sessions_handler(
             )
         })?;
 
+    // Get the current session ID by matching token hash
+    let current_session_id: Option<Uuid> = if let Some(ref current_hash) = current_token_hash {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT id FROM user_sessions WHERE session_token_hash = $1"
+        )
+        .bind(current_hash)
+        .fetch_optional(&pool)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
     let response: Vec<SessionResponse> = sessions
         .into_iter()
         .map(|s| {
@@ -2022,14 +2036,16 @@ pub async fn get_sessions_handler(
                 .and_then(|n| n.as_str())
                 .map(|s| s.to_string());
 
+            // Check if this session matches the current session ID
+            let is_current = current_session_id.as_ref() == Some(&s.id);
+
             SessionResponse {
                 id: s.id.to_string(),
                 device_name,
                 ip_address: s.ip_address.map(|ip| ip.to_string()),
                 created_at: s.created_at.to_rfc3339(),
                 last_seen_at: s.last_seen_at.to_rfc3339(),
-                is_current: current_token.as_ref()
-                    == Some(&crate::sessions::hash_token(&s.id.to_string())),
+                is_current,
             }
         })
         .collect();

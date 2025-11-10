@@ -117,6 +117,60 @@ function App() {
     };
   }, []);
 
+  // iOS WebView recovery after background termination
+  // Handles cases where iOS kills the WKWebView content process when app is backgrounded
+  // See: https://github.com/tauri-apps/wry/pull/1624
+  useEffect(() => {
+    // Only for Tauri apps (iOS/Android/Desktop)
+    if (!window.__TAURI__) return;
+
+    let recoveryAttempted = false;
+    let checkTimer = null;
+
+    const performRecovery = () => {
+      // Check if we're in the broken "about:blank" state
+      const isBlank =
+        document.title === '' ||
+        document.title === 'about:blank' ||
+        document.getElementById('root')?.children.length === 0;
+
+      if (isBlank && !recoveryAttempted) {
+        console.warn('⚠️ iOS WebView content process terminated - recovering...');
+        recoveryAttempted = true;
+
+        // Reload the page to restart the WKWebView content process
+        window.location.reload();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // App became visible - check for blank state after short delay
+        // Delay ensures DOM has settled after iOS resume
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(performRecovery, 150);
+      }
+    };
+
+    const handlePageShow = (event) => {
+      // iOS-specific: page restored from back-forward cache (bfcache)
+      if (event.persisted) {
+        clearTimeout(checkTimer);
+        checkTimer = setTimeout(performRecovery, 150);
+      }
+    };
+
+    // Listen for app resume events
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      clearTimeout(checkTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, []);
+
   // Initialize authentication state
   const initializeAuth = async () => {
     try {
