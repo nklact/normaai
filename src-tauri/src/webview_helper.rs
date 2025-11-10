@@ -220,7 +220,7 @@ fn create_observer(
 // WKNavigationDelegate implementation for handling WebContent process termination
 #[derive(Debug)]
 pub struct ProcessTerminationDelegateIvars {
-    pub webview_window: WebviewWindow,
+    pub wkwebview: Retained<WKWebView>,
 }
 
 define_class!(
@@ -237,9 +237,9 @@ define_class!(
         unsafe fn webViewWebContentProcessDidTerminate(&self, _webview: &WKWebView) {
             println!("⚠️ WKWebView content process terminated - reloading...");
 
-            // Reload the webview to restore functionality
-            let webview_window = &self.ivars().webview_window;
-            let _ = webview_window.eval("window.location.reload()");
+            // Reload the webview by calling the reload method directly on WKWebView
+            let wkwebview = &self.ivars().wkwebview;
+            let _: () = msg_send![wkwebview, reload];
 
             println!("✅ WebView reload initiated");
         }
@@ -247,9 +247,9 @@ define_class!(
 );
 
 impl ProcessTerminationDelegate {
-    fn new(mtm: MainThreadMarker, webview_window: WebviewWindow) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, wkwebview: Retained<WKWebView>) -> Retained<Self> {
         let this = mtm.alloc::<Self>();
-        let this = this.set_ivars(ProcessTerminationDelegateIvars { webview_window });
+        let this = this.set_ivars(ProcessTerminationDelegateIvars { wkwebview });
         unsafe { msg_send![super(this), init] }
     }
 }
@@ -269,8 +269,11 @@ pub fn enable_process_termination_handler(webview_window: &WebviewWindow) {
         }
         let wkwebview = &*wkwebview_ptr;
 
+        // Retain the WKWebView to store in delegate
+        let wkwebview_retained = Retained::retain(wkwebview_ptr).unwrap();
+
         // Create our navigation delegate
-        let delegate = ProcessTerminationDelegate::new(mtm, webview_window.clone());
+        let delegate = ProcessTerminationDelegate::new(mtm, wkwebview_retained);
 
         // Store the delegate in thread-local storage to keep it alive
         NAVIGATION_DELEGATE.with(|cell| {
