@@ -18,20 +18,17 @@ use tauri::WebviewWindow;
 // Forward declare WKWebView and WKNavigationDelegate
 // These are from WebKit framework, not available in objc2_ui_kit
 objc2::extern_class!(
+    #[unsafe(super(objc2_ui_kit::UIView))]
     #[derive(Debug, PartialEq, Eq, Hash)]
+    #[name = "WKWebView"]
     pub struct WKWebView;
-
-    unsafe impl objc2::ClassType for WKWebView {
-        type Super = objc2_ui_kit::UIView;
-        type Mutability = objc2::mutability::InteriorMutable;
-        const NAME: &'static str = "WKWebView";
-    }
 );
 
 objc2::extern_protocol!(
+    #[name = "WKNavigationDelegate"]
     pub unsafe trait WKNavigationDelegate: NSObjectProtocol {
         #[optional]
-        #[method(webViewWebContentProcessDidTerminate:)]
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
         unsafe fn webViewWebContentProcessDidTerminate(&self, webview: &WKWebView);
     }
 );
