@@ -15,8 +15,30 @@ use objc2_ui_kit::{
 };
 use tauri::WebviewWindow;
 
+// Forward declare WKWebView and WKNavigationDelegate
+// These are from WebKit framework, not available in objc2_ui_kit
+objc2::extern_class!(
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    pub struct WKWebView;
+
+    unsafe impl objc2::ClassType for WKWebView {
+        type Super = objc2_ui_kit::UIView;
+        type Mutability = objc2::mutability::InteriorMutable;
+        const NAME: &'static str = "WKWebView";
+    }
+);
+
+objc2::extern_protocol!(
+    pub unsafe trait WKNavigationDelegate: NSObjectProtocol {
+        #[optional]
+        #[method(webViewWebContentProcessDidTerminate:)]
+        unsafe fn webViewWebContentProcessDidTerminate(&self, webview: &WKWebView);
+    }
+);
+
 thread_local! {
     static KEYBOARD_SCROLL_PREVENT_DELEGATE: RefCell<Option<Retained<KeyboardScrollPreventDelegate>>> = RefCell::new(None);
+    static NAVIGATION_DELEGATE: RefCell<Option<Retained<ProcessTerminationDelegate>>> = RefCell::new(None);
 }
 
 pub fn disable_scroll_on_keyboard_show(webview_window: &WebviewWindow) {
@@ -196,4 +218,76 @@ fn create_observer(
     });
 
     unsafe { center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block) }
+}
+
+// WKNavigationDelegate implementation for handling WebContent process termination
+#[derive(Debug)]
+pub struct ProcessTerminationDelegateIvars {
+    pub webview_window: WebviewWindow,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "ProcessTerminationDelegate"]
+    #[ivars = ProcessTerminationDelegateIvars]
+    pub struct ProcessTerminationDelegate;
+
+    unsafe impl NSObjectProtocol for ProcessTerminationDelegate {}
+
+    unsafe impl WKNavigationDelegate for ProcessTerminationDelegate {
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        unsafe fn webViewWebContentProcessDidTerminate(&self, _webview: &WKWebView) {
+            println!("⚠️ WKWebView content process terminated - reloading...");
+
+            // Reload the webview to restore functionality
+            let webview_window = &self.ivars().webview_window;
+            let _ = webview_window.eval("window.location.reload()");
+
+            println!("✅ WebView reload initiated");
+        }
+    }
+);
+
+impl ProcessTerminationDelegate {
+    fn new(mtm: MainThreadMarker, webview_window: WebviewWindow) -> Retained<Self> {
+        let this = mtm.alloc::<Self>();
+        let this = this.set_ivars(ProcessTerminationDelegateIvars { webview_window });
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
+/// Sets up WKNavigationDelegate to handle WebContent process termination
+/// This fixes the blank screen issue when iOS kills the WebContent process after backgrounding
+pub fn enable_process_termination_handler(webview_window: &WebviewWindow) {
+    let _ = webview_window.with_webview(|webview| unsafe {
+        // SAFETY: This is guaranteed to be called on the main thread
+        let mtm = MainThreadMarker::new_unchecked();
+
+        // Cast to WKWebView
+        let wkwebview_ptr = webview.inner() as *mut WKWebView;
+        if wkwebview_ptr.is_null() {
+            println!("❌ Failed to get WKWebView pointer");
+            return;
+        }
+        let wkwebview = &*wkwebview_ptr;
+
+        // Create our navigation delegate
+        let delegate = ProcessTerminationDelegate::new(mtm, webview_window.clone());
+
+        // Store the delegate in thread-local storage to keep it alive
+        NAVIGATION_DELEGATE.with(|cell| {
+            *cell.borrow_mut() = Some(delegate);
+        });
+
+        // Set the delegate on the WKWebView
+        NAVIGATION_DELEGATE.with(|cell| {
+            if let Some(delegate) = cell.borrow().as_ref() {
+                let delegate_obj: &ProtocolObject<dyn WKNavigationDelegate> =
+                    ProtocolObject::from_ref(&**delegate);
+                let _: () = msg_send![wkwebview, setNavigationDelegate: delegate_obj];
+                println!("✅ WKNavigationDelegate set for process termination handling");
+            }
+        });
+    });
 }

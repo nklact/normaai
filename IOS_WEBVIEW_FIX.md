@@ -24,21 +24,29 @@ wry = { git = "https://github.com/tauri-apps/wry", branch = "dev" }
 
 This includes the merged fix from [tauri-apps/wry#1624](https://github.com/tauri-apps/wry/pull/1624).
 
-### 2. Native iOS Health Monitoring
+### 2. Native WKNavigationDelegate Implementation
 
-Added native Rust code in `src-tauri/src/lib.rs` that:
+Implemented a proper `WKNavigationDelegate` in `src-tauri/src/webview_helper.rs` using objc2:
 
-- **Spawns a background thread** that checks WebView health every 2 seconds
-- **Evaluates JavaScript** to test if the WebView is responsive
-- **Automatically reloads** the page if the WebView becomes unresponsive
-- **Works at the native level** independent of the JavaScript engine
+**Key Components:**
+- **WKWebView and WKNavigationDelegate declarations**: Forward-declared using `objc2::extern_class!` and `objc2::extern_protocol!`
+- **ProcessTerminationDelegate class**: Custom Objective-C class created at runtime using `define_class!` macro
+- **webViewWebContentProcessDidTerminate**: Implements Apple's official delegate method for detecting process termination
+- **Thread-local storage**: Keeps the delegate instance alive for the app lifetime
+- **Direct WKWebView API**: Sets the navigation delegate directly on the WKWebView instance
+
+**How it works:**
+1. When app starts, we create a `ProcessTerminationDelegate` instance
+2. Set it as the WKWebView's `navigationDelegate`
+3. When iOS kills the WebContent process, Apple's WebKit framework calls our delegate method
+4. We automatically reload the page to restore functionality
 
 ### 3. Removed JavaScript-Only Fix
 
 Removed the ineffective JavaScript detection from `src\App.jsx` (lines 120-172) since:
 - JavaScript cannot run when the WebContent process is terminated
 - Event listeners don't fire when the process that registered them is dead
-- Native monitoring is the only reliable solution
+- Native delegate is the only reliable and proper solution
 
 ## Technical Details
 
@@ -63,27 +71,38 @@ Removed the ineffective JavaScript detection from `src\App.jsx` (lines 120-172) 
 ### How the Fix Works
 
 ```rust
-// In src-tauri/src/lib.rs
-std::thread::spawn(move || {
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(2));
+// In src-tauri/src/webview_helper.rs
 
-        // Try to evaluate JavaScript to check if webview is alive
-        match webview_clone.eval("window.__TAURI_ALIVE__ = true; 'ok'") {
-            Ok(_) => {
-                // WebView is responsive
-            }
-            Err(_) => {
-                // WebView is unresponsive - try to reload
-                println!("⚠️ iOS WebView unresponsive, attempting reload...");
-                let _ = webview_clone.eval("window.location.reload()");
-            }
+// Define the WKNavigationDelegate protocol
+objc2::extern_protocol!(
+    pub unsafe trait WKNavigationDelegate: NSObjectProtocol {
+        #[optional]
+        #[method(webViewWebContentProcessDidTerminate:)]
+        unsafe fn webViewWebContentProcessDidTerminate(&self, webview: &WKWebView);
+    }
+);
+
+// Implement our custom delegate
+define_class!(
+    pub struct ProcessTerminationDelegate;
+
+    unsafe impl WKNavigationDelegate for ProcessTerminationDelegate {
+        #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        unsafe fn webViewWebContentProcessDidTerminate(&self, _webview: &WKWebView) {
+            println!("⚠️ WKWebView content process terminated - reloading...");
+            let webview_window = &self.ivars().webview_window;
+            let _ = webview_window.eval("window.location.reload()");
         }
     }
-});
+);
 ```
 
-This runs in the main app process (not WebContent), so it survives WebContent termination.
+**This is the proper Apple-sanctioned approach:**
+1. Uses official `WKNavigationDelegate` protocol
+2. Implements `webViewWebContentProcessDidTerminate` delegate method
+3. Called directly by WebKit framework when process terminates
+4. No polling, no wasted resources, no battery drain
+5. Runs in main app process, independent of WebContent process
 
 ## Testing
 

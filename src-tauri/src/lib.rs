@@ -1,13 +1,9 @@
-// iOS-specific module for keyboard scroll prevention
+// iOS-specific module for keyboard scroll prevention and WebView process termination handling
 #[cfg(target_os = "ios")]
 mod webview_helper;
 
 #[cfg(target_os = "ios")]
 use tauri::Manager;
-
-// iOS WebView extension trait for process termination handling
-#[cfg(target_os = "ios")]
-use tauri::webview::WebviewWindowExt;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -45,11 +41,17 @@ pub fn run() {
             #[cfg(target_os = "ios")]
             {
                 if let Some(webview_window) = _app.get_webview_window("main") {
+                    // Prevent keyboard from scrolling webview
                     webview_helper::disable_scroll_on_keyboard_show(&webview_window);
+
+                    // Handle WebView content process termination (iOS background kill fix)
+                    // Uses WKNavigationDelegate to detect when iOS kills the WebContent process
+                    // and automatically reloads the page to restore functionality
+                    webview_helper::enable_process_termination_handler(&webview_window);
 
                     // Enable Safari Web Inspector for debugging (iOS 16.4+)
                     // Note: Enabled in all builds (not just debug) for TestFlight debugging
-                    use objc2::{msg_send, sel};
+                    use objc2::msg_send;
                     use objc2::runtime::AnyObject;
 
                     let _ = webview_window.with_webview(|webview| {
@@ -62,31 +64,6 @@ pub fn run() {
                     });
 
                     println!("✅ iOS WebView inspector enabled");
-
-                    // Handle WebView content process termination (iOS background kill fix)
-                    // When iOS kills the WebContent process (e.g., after long backgrounding),
-                    // we need to reload the page to restore functionality
-                    // This is a workaround until Tauri PR #14325 is merged
-                    let webview_clone = webview_window.clone();
-                    std::thread::spawn(move || {
-                        loop {
-                            std::thread::sleep(std::time::Duration::from_secs(2));
-
-                            // Try to evaluate JavaScript to check if webview is alive
-                            match webview_clone.eval("window.__TAURI_ALIVE__ = true; 'ok'") {
-                                Ok(_) => {
-                                    // WebView is responsive
-                                }
-                                Err(_) => {
-                                    // WebView is unresponsive - try to reload
-                                    println!("⚠️ iOS WebView unresponsive, attempting reload...");
-                                    let _ = webview_clone.eval("window.location.reload()");
-                                }
-                            }
-                        }
-                    });
-
-                    println!("✅ iOS WebView health monitoring enabled");
                 }
             }
             Ok(())
