@@ -11,6 +11,7 @@ import PlanSelectionModal from "./components/PlanSelectionModal";
 import SubscriptionManagementModal from "./components/SubscriptionManagementModal";
 import SettingsModal from "./components/SettingsModal";
 import UpdateChecker from "./components/UpdateChecker";
+import { ChatSkeleton } from "./components/Skeleton";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import apiService from "./services/api";
 
@@ -27,6 +28,7 @@ function App() {
 
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true); // Loading state during auth initialization
   const [userStatus, setUserStatus] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState('login');
@@ -124,6 +126,7 @@ function App() {
 
   // Initialize authentication state
   const initializeAuth = async () => {
+    setAuthLoading(true);
     try {
       // Check for OAuth callback code in URL (Web platform only)
       // For Tauri apps, authentication is handled by tauri-plugin-google-auth
@@ -218,6 +221,8 @@ function App() {
       // For other errors, just log - don't try to start trial automatically
       // User can still use the app, trial will be created when needed
       console.error('⚠️ Auth initialization error (non-fatal):', error.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -630,17 +635,15 @@ function App() {
         aiMessage
       ]);
 
-      // Refresh chat list in background (non-blocking)
-      loadChats().catch(err => console.warn('Could not refresh chat list:', err));
-
       // Update chat title with first user message if it's still default
+      // Check before refreshing chat list to avoid race condition
       const currentChat = chats.find(chat => chat.id === activeChatId);
       if (currentChat && currentChat.title === 'Nova konverzacija') {
         try {
           const newTitle = generateChatTitle(question);
           await apiService.updateChatTitle(activeChatId, newTitle);
 
-          // Update local state
+          // Update local state immediately
           setChats(prevChats =>
             prevChats.map(chat =>
               chat.id === activeChatId
@@ -652,6 +655,9 @@ function App() {
           console.warn('Could not update chat title:', titleError);
         }
       }
+
+      // Refresh chat list after title update (non-blocking)
+      loadChats().catch(err => console.warn('Could not refresh chat list:', err));
 
       // Refresh user status to update message count
       try {
@@ -760,8 +766,13 @@ function App() {
     <ThemeProvider>
       <UpdateChecker />
 
-      {/* Show AuthPage if not authenticated - blocks main app from loading */}
-      {!isAuthenticated ? (
+      {/* Show loading screen during auth initialization */}
+      {authLoading ? (
+        <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
+          <ChatSkeleton />
+        </div>
+      ) : !isAuthenticated ? (
+        /* Show AuthPage if not authenticated - blocks main app from loading */
         <AuthPage
           onSuccess={handleAuthSuccess}
           initialTab={authInitialTab}

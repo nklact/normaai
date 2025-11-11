@@ -8,6 +8,7 @@ mod laws;
 mod contracts;
 mod cleanup;
 mod sessions;
+mod email_service;
 
 use axum::{
     routing::{get, post, put, delete},
@@ -44,6 +45,10 @@ async fn main() {
     // Supabase configuration (optional - for social login and unified auth)
     let supabase_url = env::var("SUPABASE_URL").ok();
     let supabase_jwt_secret = env::var("SUPABASE_JWT_SECRET").ok();
+
+    // Resend API key for email service
+    let resend_api_key = env::var("RESEND_API_KEY")
+        .expect("RESEND_API_KEY environment variable must be set");
 
     // Connect to database with optimized pool settings for Fly.io auto-suspension
     // IMPORTANT: Use Supabase's Transaction pooler (port 6543) for auto-suspend compatibility
@@ -134,6 +139,7 @@ async fn main() {
             jwt_secret.clone(),
             supabase_url.clone(),
             supabase_jwt_secret.clone(),
+            resend_api_key.clone(),
         ));
 
     // Database and scraper routes (4-element state with Supabase JWT secret)

@@ -266,16 +266,8 @@ class ApiService {
           const linkResult = await linkResponse.json();
           console.log("✅ User linked to backend:", linkResult);
 
-          // Step 3: Request verification email for email/password users
-          try {
-            await this.requestEmailVerification(data.session.access_token);
-          } catch (verificationError) {
-            console.error(
-              "Failed to send verification email:",
-              verificationError
-            );
-            // Don't fail registration if verification email fails
-          }
+          // Verification email is now sent automatically by the backend
+          // No need to call requestEmailVerification here
         }
       } catch (linkError) {
         console.error("Error linking user to backend:", linkError);
@@ -865,39 +857,57 @@ class ApiService {
   }
 
   /**
-   * Request password reset
+   * Request password reset (sends email via backend Resend service)
    */
   async forgotPassword(email) {
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
 
-    if (error) {
-      throw new Error(error.message || "Failed to send password reset email");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to send password reset email");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error requesting password reset:", error);
+      throw error;
     }
-
-    return {
-      success: true,
-      message: "Instrukcije za resetovanje lozinke su poslate na email.",
-    };
   }
 
   /**
-   * Reset password (when user follows email link)
+   * Reset password using token from email (backend validation)
    */
-  async resetPassword(newPassword) {
-    const { data, error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+  async resetPassword(token, newPassword) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token, new_password: newPassword }),
+      });
 
-    if (error) {
-      throw new Error(error.message || "Failed to reset password");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to reset password");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      throw error;
     }
-
-    return {
-      success: true,
-      message: "Lozinka je uspešno promenjena",
-    };
   }
 
   /**
@@ -930,15 +940,7 @@ class ApiService {
       }
 
       const result = await response.json();
-
-      // If we got a verification token, send email via EmailJS
-      if (result.verification_token && result.email) {
-        await this.sendVerificationEmail(
-          result.email,
-          result.verification_token
-        );
-      }
-
+      // Email is now sent server-side by the backend
       return result;
     } catch (error) {
       console.error("Error requesting email verification:", error);
@@ -946,51 +948,8 @@ class ApiService {
     }
   }
 
-  /**
-   * Send verification email via EmailJS
-   */
-  async sendVerificationEmail(email, verificationToken) {
-    try {
-      // Import EmailJS
-      const emailjs = await import("@emailjs/browser");
-
-      // Verification URL that user will click
-      // ALWAYS use production website URL, regardless of where user registered from
-      // This ensures verification works from desktop app, mobile app, or web
-      const verificationUrl = `https://chat.normaai.rs/verify-email.html?token=${verificationToken}`;
-
-      const templateParams = {
-        email: email,
-        verification_url: verificationUrl,
-        app_name: "Norma AI",
-      };
-
-      // Send email using EmailJS (same setup as password reset)
-      // TODO: Configure EmailJS service ID, template ID, and public key in environment variables
-      const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-      const EMAILJS_TEMPLATE_ID = import.meta.env
-        .VITE_EMAILJS_VERIFICATION_TEMPLATE_ID;
-      const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-
-      if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-        console.warn("EmailJS not configured. Verification email not sent.");
-        console.log("Verification URL would be:", verificationUrl);
-        return;
-      }
-
-      await emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ID,
-        templateParams,
-        EMAILJS_PUBLIC_KEY
-      );
-
-      console.log("✅ Verification email sent to:", email);
-    } catch (error) {
-      console.error("Failed to send verification email via EmailJS:", error);
-      throw error;
-    }
-  }
+  // Email sending is now handled server-side by the backend
+  // No client-side email sending needed anymore
 
   /**
    * Check if user is authenticated

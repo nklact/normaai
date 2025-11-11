@@ -125,7 +125,6 @@ pub struct AuthResponse {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub migrated_chats: Option<i64>,
-    pub verification_token: Option<String>, // Added for EmailJS integration
     pub message: String,
 }
 
@@ -268,8 +267,6 @@ pub struct UserStatusResponse {
 pub struct PasswordResetResponse {
     pub success: bool,
     pub message: String,
-    pub reset_token: Option<String>, // Added for EmailJS integration
-    pub email: Option<String>, // Added for EmailJS integration
 }
 
 // Email Verification Response
@@ -277,8 +274,6 @@ pub struct PasswordResetResponse {
 pub struct VerificationEmailResponse {
     pub success: bool,
     pub message: String,
-    pub email: Option<String>, // Email to send verification to
-    pub verification_token: Option<String>, // Token for verification link
 }
 
 // Account Deletion Models

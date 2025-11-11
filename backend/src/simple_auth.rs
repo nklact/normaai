@@ -53,13 +53,14 @@ pub struct SupabaseClaims {
 }
 
 // Application state for auth endpoints
-// (database pool, openrouter_api_key, jwt_secret, supabase_url, supabase_jwt_secret)
+// (database pool, openrouter_api_key, jwt_secret, supabase_url, supabase_jwt_secret, resend_api_key)
 pub type AuthAppState = (
     Pool<Postgres>,
     String,
     String,
     Option<String>,
     Option<String>,
+    String,
 );
 
 // Generate JWT token
@@ -184,7 +185,7 @@ pub async fn verify_any_token(
 
 // Link Supabase auth user to backend user (for registration and OAuth)
 pub async fn link_user_handler(
-    State((pool, _, _jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, _jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Extract token for session creation
@@ -356,7 +357,35 @@ pub async fn link_user_handler(
             }
         }
 
-        // User already linked (and restored if needed) - just return their info
+        // User already linked (and restored if needed)
+        // If logging in via OAuth, auto-verify email and update OAuth info
+        if is_oauth && !user.email_verified {
+            sqlx::query(
+                "UPDATE users
+                 SET email_verified = true, oauth_provider = $1, oauth_profile_picture_url = $2, name = COALESCE(NULLIF(name, ''), $3)
+                 WHERE id = $4"
+            )
+            .bind(&oauth_provider)
+            .bind(&profile_picture)
+            .bind(&name)
+            .bind(user.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to update OAuth user verification: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "DATABASE_ERROR".to_string(),
+                        message: "Greška ažuriranja korisnika".to_string(),
+                        details: Some(serde_json::json!({"details": e.to_string()})),
+                    }),
+                )
+            })?;
+
+            println!("✅ Auto-verified email for OAuth user {}", user.email);
+        }
+
         (user.id, 0)
     } else {
         // Create new registered user with trial (5 messages)
@@ -499,7 +528,6 @@ pub async fn link_user_handler(
         access_token: None, // Supabase handles tokens
         refresh_token: None,
         migrated_chats: Some(migrated_chats),
-        verification_token: None,
         message: "Uspešno povezan nalog".to_string(),
     }))
 }
@@ -517,7 +545,7 @@ pub struct CheckProviderResponse {
 }
 
 pub async fn check_provider_handler(
-    State((pool, _, _, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _, _resend_api_key)): State<AuthAppState>,
     Json(request): Json<CheckProviderRequest>,
 ) -> Result<Json<CheckProviderResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Query Supabase auth.identities to get ALL providers
@@ -540,7 +568,7 @@ pub async fn check_provider_handler(
 
 // User status endpoint - uses optimized single-query approach
 pub async fn user_status_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<UserStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Try async verification first (supports both Supabase and custom tokens)
@@ -570,7 +598,7 @@ pub async fn user_status_handler(
 
 // Refresh JWT token
 pub async fn refresh_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Get current token from Authorization header
@@ -648,7 +676,6 @@ pub async fn refresh_handler(
                         access_token: Some(new_token),
                         refresh_token: None,
                         migrated_chats: None,
-                        verification_token: None, // Not needed for refresh
                         message: "Token uspešno osvežen".to_string(),
                     }));
                 }
@@ -678,7 +705,7 @@ pub async fn refresh_handler(
 
 // Forgot password endpoint
 pub async fn forgot_password_handler(
-    State((pool, _, _, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _, _resend_api_key)): State<AuthAppState>,
     Json(request): Json<ForgotPasswordRequest>,
 ) -> Result<Json<PasswordResetResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -736,33 +763,36 @@ pub async fn forgot_password_handler(
                 )
             })?;
 
-        // NOTE: Email sending moved to frontend via EmailJS
-        // Return token and email for frontend to send the email
-        println!(
-            "Password reset token generated for {}: {}",
-            request.email, token
-        );
+        // Send password reset email via Resend (server-side)
+        match crate::email_service::send_password_reset_email(&_resend_api_key, &request.email, &token).await {
+            Ok(message_id) => {
+                println!(
+                    "✅ Password reset email sent to {} (ID: {})",
+                    request.email, message_id
+                );
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to send password reset email: {:?}", e);
+                // Don't fail the request - token is still valid for manual use
+            }
+        }
 
         return Ok(Json(PasswordResetResponse {
             success: true,
-            message: "Instrukcije za resetovanje lozinke će biti poslane na email.".to_string(),
-            reset_token: Some(token),
-            email: Some(request.email),
+            message: "Instrukcije za resetovanje lozinke su poslate na email.".to_string(),
         }));
     }
 
-    // Always return success (but no token) to prevent email enumeration attacks
+    // Always return success to prevent email enumeration attacks
     Ok(Json(PasswordResetResponse {
         success: true,
         message: "Ako email postoji, instrukcije za resetovanje lozinke su poslane.".to_string(),
-        reset_token: None,
-        email: None,
     }))
 }
 
 // Reset password endpoint
 pub async fn reset_password_handler(
-    State((pool, _, _, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _, _resend_api_key)): State<AuthAppState>,
     Json(request): Json<ResetPasswordRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate input
@@ -861,7 +891,7 @@ pub async fn reset_password_handler(
 
 // Request email verification (send/resend verification email)
 pub async fn request_email_verification_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<VerificationEmailResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify user is authenticated
@@ -914,8 +944,6 @@ pub async fn request_email_verification_handler(
         return Ok(Json(VerificationEmailResponse {
             success: true,
             message: "Email je već verifikovan".to_string(),
-            email: None,
-            verification_token: None,
         }));
     }
 
@@ -948,23 +976,30 @@ pub async fn request_email_verification_handler(
         )
     })?;
 
-    println!(
-        "📧 Email verification token generated for {}: {}",
-        user.email, token
-    );
+    // Send verification email via Resend (server-side)
+    match crate::email_service::send_verification_email(&_resend_api_key, &user.email, &token).await {
+        Ok(message_id) => {
+            println!(
+                "✅ Verification email sent to {} (ID: {})",
+                user.email, message_id
+            );
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to send verification email: {:?}", e);
+            // Don't fail the request - token is still valid for manual verification
+        }
+    }
 
-    // Return token and email for frontend to send via EmailJS
+    // Return success (token is sent via email, not returned to frontend)
     Ok(Json(VerificationEmailResponse {
         success: true,
-        message: "Verifikacioni token je kreiran".to_string(),
-        email: Some(user.email),
-        verification_token: Some(token),
+        message: "Verifikacioni email je poslat".to_string(),
     }))
 }
 
 // Email verification endpoint
 pub async fn verify_email_handler(
-    State((pool, _, _, _, _)): State<AuthAppState>,
+    State((pool, _, _, _, _, _resend_api_key)): State<AuthAppState>,
     Json(request): Json<VerifyEmailRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Find and validate verification token
@@ -1049,7 +1084,7 @@ pub async fn logout_handler() -> Result<Json<MessageResponse>, (StatusCode, Json
 
 // Create premium subscription
 pub async fn create_subscription_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateSubscriptionRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1209,7 +1244,7 @@ pub async fn create_subscription_handler(
 
 // Get subscription status
 pub async fn subscription_status_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify JWT token
@@ -1338,7 +1373,7 @@ pub async fn subscription_status_handler(
 
 // Cancel subscription
 pub async fn cancel_subscription_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<MessageResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify JWT token
@@ -1456,7 +1491,7 @@ pub struct SubscriptionResponse {
 
 // Change plan endpoint
 pub async fn change_plan_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: HeaderMap,
     Json(request): Json<ChangePlanRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1611,7 +1646,7 @@ pub async fn change_plan_handler(
 
 // Change billing period endpoint
 pub async fn change_billing_period_handler(
-    State((pool, _, jwt_secret, _, _)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, _, _resend_api_key)): State<AuthAppState>,
     headers: HeaderMap,
     Json(request): Json<ChangeBillingPeriodRequest>,
 ) -> Result<Json<SubscriptionResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1785,7 +1820,7 @@ pub struct ChangeBillingPeriodRequest {
 
 /// Request account deletion (soft delete with 30-day grace period)
 pub async fn request_delete_account_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
     Json(payload): Json<crate::models::DeleteAccountRequest>,
 ) -> Result<Json<crate::models::DeleteAccountResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -1921,7 +1956,7 @@ pub async fn request_delete_account_handler(
 
 /// Restore account during grace period (called manually or automatically on login)
 pub async fn restore_account_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<crate::models::RestoreAccountResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Verify token (supports both Supabase and custom JWT tokens)
@@ -2023,7 +2058,7 @@ pub struct SessionResponse {
 
 /// Get all active sessions for the authenticated user
 pub async fn get_sessions_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<SessionResponse>>, (StatusCode, Json<ErrorResponse>)> {
     let user_id = crate::database::verify_user_from_headers_async(
@@ -2113,7 +2148,7 @@ pub struct RevokeSessionRequest {
 
 /// Revoke a specific session
 pub async fn revoke_session_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
     Json(payload): Json<RevokeSessionRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
@@ -2179,7 +2214,7 @@ pub async fn revoke_session_handler(
 
 /// Revoke all sessions except the current one
 pub async fn revoke_all_sessions_handler(
-    State((pool, _, jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     let user_id = crate::database::verify_user_from_headers_async(
@@ -2237,7 +2272,7 @@ pub struct ChangePasswordRequest {
 
 /// Change user password (requires Supabase auth)
 pub async fn change_password_handler(
-    State((pool, _, _jwt_secret, _, supabase_jwt_secret)): State<AuthAppState>,
+    State((pool, _, _jwt_secret, _, supabase_jwt_secret, _resend_api_key)): State<AuthAppState>,
     headers: axum::http::HeaderMap,
     Json(payload): Json<ChangePasswordRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
@@ -2331,6 +2366,6 @@ pub async fn change_password_handler(
 }
 
 // ==================== EMAIL FUNCTIONS ====================
-// NOTE: Email sending has been moved to frontend using EmailJS
-// Backend now only generates tokens and returns them to frontend
-// This eliminates the need for backend email configuration
+// NOTE: Email sending is handled by backend using Resend API
+// Backend generates tokens and sends emails via email_service module
+// This provides better security and control over email delivery
