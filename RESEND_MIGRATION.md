@@ -38,7 +38,7 @@ Created a professional email service with:
 ### 5. **Configuration**
 **Environment Variables (`.env`):**
 ```env
-VITE_RESEND_API_KEY=re_3M7Fd9Er_MCuXAu2mYM6SWXHA82jRMGcT
+VITE_RESEND_API_KEY=your_resend_api_key_here
 ```
 
 **Sending Email:**
@@ -107,7 +107,7 @@ await sendVerificationEmail('your-email@example.com', 'test_token_123');
 1. **Update GitHub Secrets**
    Add the Resend API key to your GitHub repository secrets:
    - Go to: Settings → Secrets and variables → Actions
-   - Add new secret: `VITE_RESEND_API_KEY` = `re_3M7Fd9Er_MCuXAu2mYM6SWXHA82jRMGcT`
+   - Add new secret: `VITE_RESEND_API_KEY` = `your_resend_api_key_here`
 
 2. **Test Email Sending**
    - Run `npm run dev`
