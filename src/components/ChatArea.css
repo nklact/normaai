@@ -17,7 +17,8 @@
 
 @media (max-width: 768px) {
   .chat-content-wrapper {
-    overflow: visible; /* Mobile: allow parent (.main-content) to handle scrolling */
+    /* Keep overflow hidden - child .messages-wrapper handles scrolling */
+    overflow: hidden;
   }
 }
 
@@ -568,14 +569,15 @@
 @media (max-width: 768px) {
   .chat-area {
     /* Natural flex sizing - no fixed heights or padding-top needed */
-    overflow: visible; /* Allow parent scrolling to work */
+    /* Keep overflow hidden - child components handle their own scrolling */
+    overflow: hidden;
   }
 
   .welcome-screen {
     padding: 16px; /* Even padding all around */
-    /* Let flexbox handle height naturally - no fixed height needed */
-    /* Parent (.main-content) handles scrolling on mobile */
-    overflow-y: visible;
+    /* Welcome screen handles its own scrolling if content overflows */
+    overflow-y: auto;
+    overflow-x: hidden;
     /* Keep centered vertically even when keyboard opens */
     align-items: center;
     justify-content: center;
@@ -654,9 +656,10 @@
   }
 
   .messages-wrapper {
-    /* Let flexbox handle height naturally - no fixed height needed */
-    /* Parent (.main-content) handles scrolling on mobile */
-    overflow-y: visible;
+    /* Messages wrapper handles its own scrolling on mobile */
+    /* This prevents Safari from scrolling .main-content (which would move LawSelector) */
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .messages-container::after {
@@ -673,6 +676,8 @@
 
   .input-form {
     padding: 12px 16px 16px 16px; /* Smaller padding for mobile */
+    /* Add safe area inset for iOS Safari bottom toolbar/home indicator */
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
     z-index: 100;
     background-color: var(--bg-primary);
     flex-shrink: 0; /* Prevent shrinking when keyboard opens */
@@ -680,7 +685,7 @@
 
   /* Tauri iOS app ONLY */
   .tauri-ios .input-form {
-    padding-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .message-input {

@@ -77,22 +77,31 @@ function App() {
   // Detect Tauri iOS app for platform-specific styling
   useEffect(() => {
     if (window.__TAURI__) {
-      // We're in Tauri - check if it's iOS
+      // We're in Tauri - detect platform
       const platform = navigator.platform || navigator.userAgentData?.platform || '';
-      const isIOS = /iPhone|iPad|iPod/.test(platform) || /iPhone|iPad|iPod/.test(navigator.userAgent);
+      const userAgent = navigator.userAgent;
+      const isIOS = /iPhone|iPad|iPod/.test(platform) || /iPhone|iPad|iPod/.test(userAgent);
+      const isAndroid = /Android/.test(userAgent);
 
       if (isIOS) {
         document.documentElement.classList.add('tauri-ios');
         console.log('🔍 Detected Tauri iOS app - added tauri-ios class');
+      } else if (isAndroid) {
+        document.documentElement.classList.add('tauri-android');
+        console.log('🔍 Detected Tauri Android app - added tauri-android class');
       }
     }
   }, []);
 
   // Detect keyboard open/close and adjust layout to fit available space
+  // ONLY for Tauri native apps - browsers handle this automatically with 100dvh
   useEffect(() => {
-    // Only on mobile devices
+    // Check if we're in a Tauri app (not a browser)
+    const isTauriApp = typeof __TAURI_BUILD__ !== 'undefined' && __TAURI_BUILD__;
+
+    // Only run in Tauri mobile apps
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile || !window.visualViewport) return;
+    if (!isTauriApp || !isMobile || !window.visualViewport) return;
 
     const handleViewportResize = () => {
       const viewportHeight = window.visualViewport.height;
@@ -124,6 +133,7 @@ function App() {
   // and reload the page, which JavaScript alone cannot do reliably.
   // See: https://github.com/tauri-apps/wry/pull/1624
 
+
   // Initialize authentication state
   const initializeAuth = async () => {
     setAuthLoading(true);
@@ -143,8 +153,22 @@ function App() {
 
           if (error) {
             console.error('❌ Error exchanging code for session:', error);
-            setErrorMessage(`OAuth greška: ${error.message}`);
-            setErrorDialogOpen(true);
+
+            // Check if user is already authenticated (code already exchanged)
+            const hasSession = await apiService.isAuthenticated();
+            if (hasSession) {
+              console.log('✅ User already has valid session, ignoring exchange error');
+              setAuthModalOpen(false);
+              // Redirect to home page after successful OAuth
+              window.location.href = '/';
+              return; // Exit early since we're redirecting
+            } else {
+              // Only show error if user is not authenticated
+              setErrorMessage(`OAuth greška: ${error.message}`);
+              setErrorDialogOpen(true);
+              // Clear the code from URL
+              window.history.replaceState(null, '', window.location.pathname);
+            }
           } else {
             console.log('✅ OAuth session obtained successfully');
 
@@ -154,10 +178,11 @@ function App() {
             }
 
             setAuthModalOpen(false);
-          }
 
-          // Clear the code from URL
-          window.history.replaceState(null, '', window.location.pathname);
+            // Redirect to home page after successful OAuth (best practice)
+            window.location.href = '/';
+            return; // Exit early since we're redirecting
+          }
         }
       }
 

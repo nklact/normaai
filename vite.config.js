@@ -7,8 +7,9 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // Use relative paths for Tauri production builds
-  base: './',
+  // Use absolute paths for web builds, relative for Tauri
+  // Tauri needs relative paths, but web needs absolute paths for SPAs with routing
+  base: process.env.TAURI_ENV_PLATFORM ? './' : '/',
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

@@ -100,14 +100,23 @@ svg {
   font-family: inherit;
 }
 
-html,
-body {
-  width: 100vw;
-  height: 100vh;
+html {
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  -webkit-text-size-adjust: 100%; /* Prevent font size inflation on orientation change */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
 }
 
 body {
@@ -165,26 +174,25 @@ select {
   padding-bottom: 24px;
 }
 
-/* When keyboard is open, prevent body scroll and reduce bottom padding */
-.keyboard-open {
+/* Keyboard handling - ONLY for Tauri native apps (browsers use 100dvh) */
+/* When keyboard is open in Tauri, prevent body scroll and reduce bottom padding */
+.tauri-ios.keyboard-open,
+.tauri-android.keyboard-open {
   touch-action: none; /* Prevent touch scrolling on body */
   overflow: hidden; /* Extra insurance against scroll */
 }
 
-/* On mobile: Use position fixed with visual viewport height when keyboard opens */
+/* On mobile Tauri apps: Use position fixed with visual viewport height when keyboard opens */
 @media (max-width: 768px) {
-  .keyboard-open .app {
+  .tauri-ios.keyboard-open .app,
+  .tauri-android.keyboard-open .app {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: var(--viewport-height, 100vh);
+    height: var(--viewport-height, 100dvh);
     padding-bottom: 8px;
     transition: height 0.3s ease; /* Smooth animation */
-  }
-
-  .keyboard-open.tauri-ios .app {
-    padding-bottom: 8px;
   }
 }
 
