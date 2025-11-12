@@ -4,7 +4,7 @@ import DeleteAccountModal from './DeleteAccountModal';
 import ConfirmDialog from './ConfirmDialog';
 import ErrorDialog from './ErrorDialog';
 import InfoDialog from './InfoDialog';
-import apiService from '../services/api';
+import apiService, { supabase } from '../services/api';
 import './SettingsModal.css';
 
 const SettingsModal = ({
@@ -28,45 +28,44 @@ const SettingsModal = ({
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // OAuth provider detection state
+  const [userProviders, setUserProviders] = useState([]);
+  const [hasEmailProvider, setHasEmailProvider] = useState(false);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+
   // Dialog states
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, type: '', sessionId: null });
   const [errorDialog, setErrorDialog] = useState({ isOpen: false, message: '' });
   const [infoDialog, setInfoDialog] = useState({ isOpen: false, message: '' });
-
-  const tabs = (
-    <div className="settings-tabs">
-      <button
-        className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
-        onClick={() => setActiveTab('account')}
-      >
-        Nalog
-      </button>
-      <button
-        className={`settings-tab ${activeTab === 'devices' ? 'active' : ''}`}
-        onClick={() => setActiveTab('devices')}
-      >
-        Uređaji
-      </button>
-      <button
-        className={`settings-tab ${activeTab === 'security' ? 'active' : ''}`}
-        onClick={() => setActiveTab('security')}
-      >
-        Sigurnost
-      </button>
-      <button
-        className={`settings-tab ${activeTab === 'danger' ? 'active' : ''}`}
-        onClick={() => setActiveTab('danger')}
-      >
-        Opasnost
-      </button>
-    </div>
-  );
 
   // Reset to account tab when modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveTab('account');
     }
+  }, [isOpen]);
+
+  // Fetch user's authentication providers when modal opens
+  useEffect(() => {
+    const fetchUserProviders = async () => {
+      if (!isOpen) return;
+
+      setLoadingProviders(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.identities) {
+          const providers = user.identities.map(identity => identity.provider);
+          setUserProviders(providers);
+          setHasEmailProvider(providers.includes('email'));
+        }
+      } catch (error) {
+        console.error('Error fetching user providers:', error);
+      } finally {
+        setLoadingProviders(false);
+      }
+    };
+
+    fetchUserProviders();
   }, [isOpen]);
 
   // Load sessions when devices tab is opened
@@ -213,7 +212,7 @@ const SettingsModal = ({
     setChangingPassword(true);
     try {
       await apiService.changePassword(newPassword);
-      setPasswordSuccess('Lozinka uspešno promenjena. Druge sesije su uklonjene.');
+      setPasswordSuccess('Lozinka uspešno promenjena. Automatski ste odjavljeni sa drugih uređaja.');
       setNewPassword('');
       setConfirmPassword('');
     } catch (error) {
@@ -442,6 +441,38 @@ const SettingsModal = ({
     const parsed = parseUserAgent(deviceName);
     return parsed.icon;
   };
+
+  // Conditionally render tabs based on user's auth provider
+  const tabs = (
+    <div className="settings-tabs">
+      <button
+        className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
+        onClick={() => setActiveTab('account')}
+      >
+        Nalog
+      </button>
+      <button
+        className={`settings-tab ${activeTab === 'devices' ? 'active' : ''}`}
+        onClick={() => setActiveTab('devices')}
+      >
+        Uređaji
+      </button>
+      {hasEmailProvider && (
+        <button
+          className={`settings-tab ${activeTab === 'security' ? 'active' : ''}`}
+          onClick={() => setActiveTab('security')}
+        >
+          Sigurnost
+        </button>
+      )}
+      <button
+        className={`settings-tab ${activeTab === 'danger' ? 'active' : ''}`}
+        onClick={() => setActiveTab('danger')}
+      >
+        Opasnost
+      </button>
+    </div>
+  );
 
   return (
     <>

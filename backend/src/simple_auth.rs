@@ -2360,7 +2360,7 @@ pub async fn change_password_handler(
 
     Ok(Json(serde_json::json!({
         "success": true,
-        "message": "Lozinka uspešno promenjena. Druge sesije su uklonjene.",
+        "message": "Lozinka uspešno promenjena. Automatski ste odjavljeni sa drugih uređaja.",
         "revoked_sessions": revoked_count
     })))
 }
