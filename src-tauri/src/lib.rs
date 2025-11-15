@@ -5,6 +5,10 @@ mod webview_helper;
 #[cfg(target_os = "ios")]
 use tauri::Manager;
 
+// Simple IAP module for mobile platforms
+#[cfg(any(target_os = "ios", target_os = "android"))]
+mod simple_iap;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -33,8 +37,9 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile (custom URL schemes)
-        .plugin(tauri_plugin_iap::init()); // In-App Purchases for iOS and Android
+        .plugin(tauri_plugin_web_auth::init()); // OAuth for mobile (custom URL schemes)
+        // REMOVED: .plugin(tauri_plugin_iap::init()) - crashes on iOS 18 with Tauri 2.9.3
+        // Using custom simple_iap implementation instead
 
     builder
         .setup(|_app| {
@@ -70,7 +75,20 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler({
-            tauri::generate_handler![greet]
+            #[cfg(any(target_os = "ios", target_os = "android"))]
+            {
+                tauri::generate_handler![
+                    greet,
+                    simple_iap::iap_init,
+                    simple_iap::iap_get_products,
+                    simple_iap::iap_purchase,
+                    simple_iap::iap_restore,
+                ]
+            }
+            #[cfg(not(any(target_os = "ios", target_os = "android")))]
+            {
+                tauri::generate_handler![greet]
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

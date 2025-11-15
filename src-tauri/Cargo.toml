@@ -1,6 +1,6 @@
 [package]
 name = "norma-ai"
-version = "0.4.31"
+version = "0.4.32"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -32,14 +32,15 @@ schemars = "=0.8.21"
 [target.'cfg(not(any(target_os = "ios", target_os = "android", target_family = "wasm")))'.dependencies]
 tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "v2" }
 
-# Mobile-specific plugins: OAuth + In-App Purchases for iOS and Android
+# Mobile-specific plugins: OAuth for iOS and Android
 [target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
 tauri-plugin-web-auth = "1.0"
-tauri-plugin-iap = "0.4"
+# REMOVED: tauri-plugin-iap = "0.4" - causes crash on iOS 18, using custom implementation
 
-# iOS-specific dependencies for keyboard scroll prevention
+# iOS-specific dependencies for IAP FFI and keyboard scroll prevention
 # No explicit version constraints - use versions from Tauri's dependency tree
 [target.'cfg(target_os = "ios")'.dependencies]
+lazy_static = "1.4"
 objc2 = { version = "0.6" }
 objc2-core-foundation = { version = "0.3" }
 objc2-foundation = { version = "0.3" }

@@ -6,44 +6,25 @@
  */
 
 import { getProductId, getAllProductIds, parseProductId } from '../config/products.js';
+import simpleIAP from './simple_iap.js';
 
 // Platform detection
 const isTauriApp = Boolean(window.__TAURI__);
 const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const isMobile = isTauriApp && isMobileDevice;
 
-// Lazy-loaded IAP plugin (loaded on first use)
-let iapPlugin = null;
-let iapPluginPromise = null;
+// Use our simple IAP implementation
+let iapInitialized = false;
 
 /**
- * Lazy load the IAP plugin (only on mobile)
- * @returns {Promise<Object|null>} The IAP plugin or null if not available
+ * Get the IAP plugin (simplified version)
+ * @returns {Object|null} The IAP plugin or null if not available
  */
-async function getIAPPlugin() {
+function getIAPPlugin() {
   if (!isMobile) {
     return null;
   }
-
-  if (iapPlugin) {
-    return iapPlugin;
-  }
-
-  if (!iapPluginPromise) {
-    iapPluginPromise = (async () => {
-      try {
-        const plugin = await import('@choochmeque/tauri-plugin-iap-api');
-        console.log('✅ IAP plugin loaded');
-        iapPlugin = plugin;
-        return plugin;
-      } catch (error) {
-        console.error('❌ Failed to load IAP plugin:', error);
-        return null;
-      }
-    })();
-  }
-
-  return iapPluginPromise;
+  return simpleIAP;
 }
 
 /**
@@ -51,17 +32,22 @@ async function getIAPPlugin() {
  * This should be called once during app startup
  */
 export async function initializeIAP() {
-  const plugin = await getIAPPlugin();
+  const plugin = getIAPPlugin();
 
   if (!plugin) {
     console.log('IAP not available on this platform');
     return { success: false, platform: 'web/desktop' };
   }
 
+  if (iapInitialized) {
+    return { success: true, platform: 'mobile', cached: true };
+  }
+
   try {
-    // Initialize the plugin (if needed by the specific plugin implementation)
     console.log('Initializing IAP...');
-    return { success: true, platform: isMobile ? 'mobile' : 'web' };
+    await plugin.initialize();
+    iapInitialized = true;
+    return { success: true, platform: 'mobile' };
   } catch (error) {
     console.error('Failed to initialize IAP:', error);
     return { success: false, error: error.message };
@@ -73,7 +59,7 @@ export async function initializeIAP() {
  * @returns {Promise<Array>} Array of product objects with pricing info
  */
 export async function getAvailableProducts() {
-  const plugin = await getIAPPlugin();
+  const plugin = getIAPPlugin();
 
   if (!plugin) {
     console.warn('IAP not available - returning empty product list');
@@ -84,17 +70,17 @@ export async function getAvailableProducts() {
     const productIds = getAllProductIds();
     console.log('Fetching products:', productIds);
 
-    const response = await plugin.getProducts(productIds, 'subs');
-    console.log('Products fetched:', response);
+    const products = await plugin.getProducts(productIds);
+    console.log('Products fetched:', products);
 
-    return response.products.map(product => ({
-      id: product.productId,
+    return products.map(product => ({
+      id: product.id,
       title: product.title,
       description: product.description,
-      priceString: product.formattedPrice,
-      currencyCode: product.priceCurrencyCode,
-      priceAmountMicros: product.priceAmountMicros,
-      ...parseProductId(product.productId), // Add planType and billingPeriod
+      priceString: `${product.currency} ${product.price}`,
+      currencyCode: product.currency,
+      price: product.price,
+      ...parseProductId(product.id), // Add planType and billingPeriod
     }));
   } catch (error) {
     console.error('Failed to fetch products:', error);
@@ -110,7 +96,7 @@ export async function getAvailableProducts() {
  * @returns {Promise<Object>} Purchase result
  */
 export async function purchaseSubscription(planType, billingPeriod, userId) {
-  const plugin = await getIAPPlugin();
+  const plugin = getIAPPlugin();
 
   if (!plugin) {
     throw new Error('In-app purchases are only available on iOS and Android apps');
@@ -124,23 +110,17 @@ export async function purchaseSubscription(planType, billingPeriod, userId) {
   try {
     console.log(`Purchasing ${productId} for user ${userId}`);
 
-    // Initiate purchase flow with app account token (iOS) or obfuscated account ID (Android)
-    const options = {
-      appAccountToken: userId, // iOS - links purchase to user account
-      obfuscatedAccountId: userId, // Android - links purchase to user account
-    };
-
-    const purchase = await plugin.purchase(productId, 'subs', options);
+    // Simple purchase call
+    const purchase = await plugin.purchase(productId);
 
     console.log('Purchase successful:', purchase);
 
     // The purchase object contains transaction info
     return {
       success: true,
-      productId: purchase.productId,
-      transactionId: purchase.orderId,
-      purchaseToken: purchase.purchaseToken,
-      purchaseTime: purchase.purchaseTime,
+      productId: purchase.product_id || productId,
+      transactionId: purchase.transaction_id,
+      receiptData: purchase.receipt_data,
       platform: getPlatform(),
     };
   } catch (error) {
@@ -169,7 +149,7 @@ export async function purchaseSubscription(planType, billingPeriod, userId) {
  * @returns {Promise<Array>} Array of restored purchases
  */
 export async function restorePurchases() {
-  const plugin = await getIAPPlugin();
+  const plugin = getIAPPlugin();
 
   if (!plugin) {
     throw new Error('Restore purchases is only available on iOS and Android apps');
@@ -178,15 +158,14 @@ export async function restorePurchases() {
   try {
     console.log('Restoring purchases...');
 
-    const response = await plugin.restorePurchases('subs');
-    console.log('Purchases restored:', response);
+    const purchases = await plugin.restorePurchases();
+    console.log('Purchases restored:', purchases);
 
-    return response.purchases.map(purchase => ({
-      productId: purchase.productId,
-      transactionId: purchase.orderId,
-      purchaseToken: purchase.purchaseToken,
-      purchaseTime: purchase.purchaseTime,
-      ...parseProductId(purchase.productId),
+    return purchases.map(purchase => ({
+      productId: purchase.product_id,
+      transactionId: purchase.transaction_id,
+      receiptData: purchase.receipt_data,
+      ...parseProductId(purchase.product_id),
     }));
   } catch (error) {
     console.error('Failed to restore purchases:', error);

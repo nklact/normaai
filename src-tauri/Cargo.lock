@@ -2116,6 +2116,7 @@ name = "norma-ai"
 version = "0.4.31"
 dependencies = [
  "block2 0.6.2",
+ "lazy_static",
  "objc2 0.6.3",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
@@ -2125,7 +2126,6 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-iap",
  "tauri-plugin-oauth",
  "tauri-plugin-opener",
  "tauri-plugin-process",
@@ -3716,29 +3716,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "swift-bridge-build"
-version = "0.1.57"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d0ea3c38460a65d975df382b71edbc0e22942d937710d63144267d6609ce738"
-dependencies = [
- "proc-macro2",
- "swift-bridge-ir",
- "syn 1.0.109",
- "tempfile",
-]
-
-[[package]]
-name = "swift-bridge-ir"
-version = "0.1.57"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ea2dcd83a40a918fb26a1bb90187691aa0ae8f2c96e8ea5e6963207bc65676"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "swift-rs"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4001,22 +3978,6 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.8",
  "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-iap"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0043581d4ef4de27908d1a4ef5924b23d1fbb72be411281a06ad2c7eca7ebd34"
-dependencies = [
- "serde",
- "serde_json",
- "swift-bridge-build",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.17",
- "windows",
- "windows-collections",
 ]
 
 [[package]]
