@@ -4,6 +4,11 @@
 
 import Foundation
 
+// Error response structure
+struct ErrorResponse: Codable {
+    let error: String
+}
+
 // Helper to convert Swift string to C string (caller must free)
 private func stringToCString(_ string: String) -> UnsafeMutablePointer<CChar> {
     let count = string.utf8.count + 1
@@ -26,7 +31,12 @@ private func jsonToCString<T: Encodable>(_ data: T) -> UnsafeMutablePointer<CCha
 // Initialize IAP
 @_cdecl("ios_iap_initialize")
 public func ios_iap_initialize() -> Bool {
-    return IAPBridge.shared.initialize()
+    if #available(iOS 15.0, *) {
+        return IAPBridge.shared.initialize()
+    } else {
+        print("❌ IAP requires iOS 15.0 or later")
+        return false
+    }
 }
 
 // Get products (async operation wrapped in sync function)
@@ -44,18 +54,24 @@ public func ios_iap_get_products_json(_ productIdsJson: UnsafePointer<CChar>) ->
     let semaphore = DispatchSemaphore(value: 0)
     var result: UnsafeMutablePointer<CChar>? = nil
 
-    Task {
-        do {
-            let products = try await IAPBridge.shared.getProducts(productIds)
-            result = jsonToCString(products)
-        } catch {
-            print("❌ Error getting products: \(error)")
-            result = nil
+    if #available(iOS 15.0, *) {
+        Task {
+            do {
+                let products = try await IAPBridge.shared.getProducts(productIds)
+                result = jsonToCString(products)
+            } catch {
+                print("❌ Error getting products: \(error)")
+                result = nil
+            }
+            semaphore.signal()
         }
-        semaphore.signal()
+
+        semaphore.wait()
+    } else {
+        print("❌ IAP requires iOS 15.0 or later")
+        result = nil
     }
 
-    semaphore.wait()
     return result
 }
 
@@ -67,29 +83,29 @@ public func ios_iap_purchase_product(_ productId: UnsafePointer<CChar>) -> Unsaf
     let semaphore = DispatchSemaphore(value: 0)
     var result: UnsafeMutablePointer<CChar>? = nil
 
-    Task {
-        do {
-            let purchaseData = try await IAPBridge.shared.purchase(productIdString)
-            result = jsonToCString(purchaseData)
-        } catch IAPError.userCancelled {
-            // Return error JSON for user cancellation
-            let errorData: [String: Any] = ["error": "user_cancelled"]
-            if let jsonData = try? JSONSerialization.data(withJSONObject: errorData),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                result = stringToCString(jsonString)
+    if #available(iOS 15.0, *) {
+        Task {
+            do {
+                let purchaseData = try await IAPBridge.shared.purchase(productIdString)
+                result = jsonToCString(purchaseData)
+            } catch IAPError.userCancelled {
+                // Return error JSON for user cancellation
+                let errorResponse = ErrorResponse(error: "user_cancelled")
+                result = jsonToCString(errorResponse)
+            } catch {
+                print("❌ Error purchasing: \(error)")
+                let errorResponse = ErrorResponse(error: error.localizedDescription)
+                result = jsonToCString(errorResponse)
             }
-        } catch {
-            print("❌ Error purchasing: \(error)")
-            let errorData: [String: Any] = ["error": error.localizedDescription]
-            if let jsonData = try? JSONSerialization.data(withJSONObject: errorData),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                result = stringToCString(jsonString)
-            }
+            semaphore.signal()
         }
-        semaphore.signal()
+
+        semaphore.wait()
+    } else {
+        let errorResponse = ErrorResponse(error: "IAP requires iOS 15.0 or later")
+        result = jsonToCString(errorResponse)
     }
 
-    semaphore.wait()
     return result
 }
 
@@ -99,18 +115,26 @@ public func ios_iap_restore_purchases() -> UnsafeMutablePointer<CChar>? {
     let semaphore = DispatchSemaphore(value: 0)
     var result: UnsafeMutablePointer<CChar>? = nil
 
-    Task {
-        do {
-            let purchases = try await IAPBridge.shared.restorePurchases()
-            result = jsonToCString(purchases)
-        } catch {
-            print("❌ Error restoring purchases: \(error)")
-            result = jsonToCString([[String: Any]]())
+    if #available(iOS 15.0, *) {
+        Task {
+            do {
+                let purchases = try await IAPBridge.shared.restorePurchases()
+                result = jsonToCString(purchases)
+            } catch {
+                print("❌ Error restoring purchases: \(error)")
+                // Return empty array on error
+                result = jsonToCString([PurchaseData]())
+            }
+            semaphore.signal()
         }
-        semaphore.signal()
+
+        semaphore.wait()
+    } else {
+        print("❌ IAP requires iOS 15.0 or later")
+        // Return empty array for unsupported iOS version
+        result = jsonToCString([PurchaseData]())
     }
 
-    semaphore.wait()
     return result
 }
 

@@ -5,6 +5,21 @@
 import Foundation
 import StoreKit
 
+// Codable data structures for JSON serialization
+public struct ProductData: Codable {
+    let id: String
+    let title: String
+    let description: String
+    let price: String
+    let currency: String
+}
+
+public struct PurchaseData: Codable {
+    let product_id: String
+    let transaction_id: String
+    let receipt_data: String
+}
+
 @available(iOS 15.0, *)
 @objc public class IAPBridge: NSObject {
     static let shared = IAPBridge()
@@ -33,21 +48,21 @@ import StoreKit
     }
 
     // Get products from App Store
-    public func getProducts(_ productIds: [String]) async throws -> [[String: Any]] {
+    public func getProducts(_ productIds: [String]) async throws -> [ProductData] {
         print("📦 Fetching products: \(productIds)")
 
         do {
             let storeProducts = try await Product.products(for: productIds)
             self.products = storeProducts
 
-            let productsData = storeProducts.map { product -> [String: Any] in
-                return [
-                    "id": product.id,
-                    "title": product.displayName,
-                    "description": product.description,
-                    "price": product.displayPrice,
-                    "currency": product.priceFormatStyle.currencyCode ?? "USD"
-                ]
+            let productsData = storeProducts.map { product -> ProductData in
+                return ProductData(
+                    id: product.id,
+                    title: product.displayName,
+                    description: product.description,
+                    price: product.displayPrice,
+                    currency: product.priceFormatStyle.currencyCode ?? "USD"
+                )
             }
 
             print("✅ Fetched \(productsData.count) products")
@@ -60,7 +75,7 @@ import StoreKit
     }
 
     // Purchase a product
-    public func purchase(_ productId: String) async throws -> [String: Any] {
+    public func purchase(_ productId: String) async throws -> PurchaseData {
         print("🛒 Attempting to purchase: \(productId)")
 
         guard let product = products.first(where: { $0.id == productId }) else {
@@ -88,11 +103,11 @@ import StoreKit
                 let receiptData = try Data(contentsOf: appStoreReceiptURL)
                 let receiptString = receiptData.base64EncodedString()
 
-                let purchaseData: [String: Any] = [
-                    "product_id": productId,
-                    "transaction_id": String(transaction.id),
-                    "receipt_data": receiptString
-                ]
+                let purchaseData = PurchaseData(
+                    product_id: productId,
+                    transaction_id: String(transaction.id),
+                    receipt_data: receiptString
+                )
 
                 print("✅ Purchase successful: \(transaction.id)")
                 return purchaseData
@@ -117,13 +132,13 @@ import StoreKit
     }
 
     // Restore purchases (required by Apple)
-    public func restorePurchases() async throws -> [[String: Any]] {
+    public func restorePurchases() async throws -> [PurchaseData] {
         print("🔄 Restoring purchases...")
 
         // Sync with App Store
         try await AppStore.sync()
 
-        var restoredPurchases: [[String: Any]] = []
+        var restoredPurchases: [PurchaseData] = []
 
         // Get all current entitlements
         for await result in Transaction.currentEntitlements {
@@ -138,11 +153,11 @@ import StoreKit
                     let receiptData = try Data(contentsOf: appStoreReceiptURL)
                     let receiptString = receiptData.base64EncodedString()
 
-                    let purchaseData: [String: Any] = [
-                        "product_id": transaction.productID,
-                        "transaction_id": String(transaction.id),
-                        "receipt_data": receiptString
-                    ]
+                    let purchaseData = PurchaseData(
+                        product_id: transaction.productID,
+                        transaction_id: String(transaction.id),
+                        receipt_data: receiptString
+                    )
 
                     restoredPurchases.append(purchaseData)
                 } catch {
