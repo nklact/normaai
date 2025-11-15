@@ -29,6 +29,7 @@ objc2::extern_protocol!(
     pub unsafe trait WKNavigationDelegate: NSObjectProtocol {
         #[optional]
         #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        #[allow(non_snake_case)]
         unsafe fn webViewWebContentProcessDidTerminate(&self, webview: &WKWebView);
     }
 );
@@ -182,6 +183,7 @@ define_class!(
 
     unsafe impl UIScrollViewDelegate for KeyboardScrollPreventDelegate {
         #[unsafe(method(scrollViewDidScroll:))]
+        #[allow(non_snake_case)]
         unsafe fn scrollViewDidScroll(&self, _scroll_view: &UIScrollView) {
             self.ivars()
                 .scroll_view
@@ -234,6 +236,7 @@ define_class!(
 
     unsafe impl WKNavigationDelegate for ProcessTerminationDelegate {
         #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+        #[allow(non_snake_case)]
         unsafe fn webViewWebContentProcessDidTerminate(&self, _webview: &WKWebView) {
             println!("⚠️ WKWebView content process terminated - reloading...");
 

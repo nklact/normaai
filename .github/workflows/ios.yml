@@ -102,6 +102,15 @@ jobs:
               # Add to target's package dependencies
               main_target.package_product_dependencies << package_product
 
+              # IMPORTANT: Also add to frameworks build phase to ensure proper linking
+              frameworks_phase = main_target.frameworks_build_phase
+              unless frameworks_phase.files.any? { |f| f.display_name == package_product_name }
+                file_ref = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+                file_ref.product_ref = package_product
+                frameworks_phase.files << file_ref
+                puts "✅ norma-ai-iap added to frameworks build phase"
+              end
+
               puts "✅ norma-ai-iap added to #{main_target.name}"
             else
               puts "⚠️ Warning: Could not find main app target"
