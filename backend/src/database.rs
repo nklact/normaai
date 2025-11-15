@@ -826,18 +826,24 @@ pub async fn can_send_message(
         .map_err(|e| format!("Failed to get user: {}", e))?;
 
     if let Some(user) = user {
-        // Professional, Team, and Premium users have unlimited messages
-        if matches!(
-            user.account_type.as_str(),
-            "professional" | "team" | "premium"
-        ) {
+        // Check if paid subscription expired
+        if let Some(expires_at) = user.premium_expires_at {
+            if expires_at < chrono::Utc::now() {
+                // Subscription expired - user reverts to trial behavior
+                // Note: During grace period, subscription_status is "active" so this won't trigger
+                return Ok(user.trial_messages_remaining.unwrap_or(0) > 0);
+            }
+        }
+
+        // Professional and Premium users have unlimited messages (if not expired)
+        // Grace period users keep access until expiration
+        if matches!(user.account_type.as_str(), "professional" | "premium") {
             return Ok(true);
         }
 
         // Trial and Individual users must have messages remaining
         Ok(user.trial_messages_remaining.unwrap_or(0) > 0)
     } else {
-        // No user found
         Ok(false)
     }
 }

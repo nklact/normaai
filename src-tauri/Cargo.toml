@@ -1,6 +1,6 @@
 [package]
 name = "norma-ai"
-version = "0.4.30"
+version = "0.4.31"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -32,9 +32,10 @@ schemars = "=0.8.21"
 [target.'cfg(not(any(target_os = "ios", target_os = "android", target_family = "wasm")))'.dependencies]
 tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "v2" }
 
-# OAuth for Mobile: ASWebAuthenticationSession (iOS), Custom Tabs (Android)
+# Mobile-specific plugins: OAuth + In-App Purchases for iOS and Android
 [target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
 tauri-plugin-web-auth = "1.0"
+tauri-plugin-iap = "0.4"
 
 # iOS-specific dependencies for keyboard scroll prevention
 # No explicit version constraints - use versions from Tauri's dependency tree

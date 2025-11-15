@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="sr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -75,7 +76,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .icon {
@@ -114,27 +117,25 @@
             line-height: 1.6;
         }
 
-        .instruction {
-            font-weight: 500;
-            color: var(--text-muted);
-            margin-top: 24px !important;
-        }
-
         @media (max-width: 640px) {
             .container {
                 padding: 32px 24px;
             }
+
             h1 {
                 font-size: 20px;
             }
+
             p {
                 font-size: 14px;
             }
+
             .icon {
                 width: 64px;
                 height: 64px;
                 font-size: 36px;
             }
+
             .logo {
                 width: 100px;
                 margin-bottom: 24px;
@@ -142,9 +143,10 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <img src="/assets/logo.svg" alt="Norma AI" class="logo" id="logo">
+        <img src="/logo.svg" alt="Norma AI" class="logo" id="logo">
 
         <div id="loading-state">
             <div class="spinner"></div>
@@ -156,18 +158,14 @@
             <div class="icon success">✓</div>
             <h1>Email adresa je verifikovana!</h1>
             <p>Vaša email adresa je uspešno verifikovana.</p>
-            <p class="instruction">
-                Vratite se u Norma AI aplikaciju da nastavite.
-            </p>
+            <p>Vratite se u Norma AI aplikaciju da nastavite.</p>
         </div>
 
         <div id="error-state" style="display: none;">
             <div class="icon error">✕</div>
             <h1>Greška pri verifikaciji</h1>
             <p id="error-message">Verifikacija nije uspela.</p>
-            <p class="instruction">
-                Pokušajte ponovo ili kontaktirajte podršku.
-            </p>
+            <p>Pokušajte ponovo ili kontaktirajte podršku.</p>
         </div>
     </div>
 
@@ -224,4 +222,5 @@
         verifyEmail();
     </script>
 </body>
+
 </html>

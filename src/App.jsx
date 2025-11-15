@@ -419,16 +419,24 @@ function App() {
 
   // Authentication handlers
   const handleAuthSuccess = async (result) => {
+    console.log('🔍 handleAuthSuccess called with result:', result);
+
     // Close mobile sidebar immediately to show main chat page
     setIsMobileMenuOpen(false);
+
+    // Close auth modal immediately
+    setAuthModalOpen(false);
 
     // Reload user status and chats
     try {
       const status = await apiService.getUserStatus();
+      console.log('🔍 handleAuthSuccess - got user status:', status);
       setUserStatus(status);
 
-      // Only set authenticated if we have complete user data
-      if (status && status.email) {
+      // Set authenticated state immediately if we have a valid session
+      // This triggers the app to render the main UI instead of AuthPage
+      if (status && (status.email || status.is_authenticated)) {
+        console.log('✅ Setting isAuthenticated to true');
         setIsAuthenticated(true);
 
         // If user has 0 messages left after login, show plan selection modal
@@ -442,6 +450,13 @@ function App() {
       await loadChats(); // Reload chats to get any migrated trial chats
     } catch (error) {
       console.error('Error loading user data after auth:', error);
+      // Even if there's an error loading status, still set authenticated if we have a session
+      // The user successfully logged in, so we should show the app
+      const hasSession = await apiService.isAuthenticated();
+      if (hasSession) {
+        console.log('✅ Setting isAuthenticated to true (fallback after error)');
+        setIsAuthenticated(true);
+      }
     }
   };
 
@@ -824,6 +839,7 @@ function App() {
             // Authentication props
             isAuthenticated={isAuthenticated}
             userStatus={userStatus}
+            onUserStatusUpdate={setUserStatus}
             onLogin={handleLogin}
             onRegister={handleRegister}
             onLogout={handleLogout}
@@ -880,6 +896,7 @@ function App() {
             currentPlan={userStatus?.access_type || 'trial'}
             userStatus={userStatus}
             onPlanChange={handlePlanChange}
+            apiService={apiService}
           />
 
           <SubscriptionManagementModal

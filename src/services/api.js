@@ -464,8 +464,19 @@ class ApiService {
               clearInterval(checkSession);
               console.log("✅ Desktop OAuth successful, session established");
 
-              // Link OAuth user to backend
-              await this.linkOAuthUser(session);
+              // Validate session
+              if (!session.user) {
+                reject(new Error("Invalid session data received from OAuth"));
+                return;
+              }
+
+              // Link OAuth user to backend (non-blocking - don't fail login if this fails)
+              try {
+                await this.linkOAuthUser(session);
+              } catch (linkError) {
+                console.error("⚠️ Failed to link OAuth user to backend (non-fatal):", linkError);
+                // Don't reject - user is authenticated in Supabase
+              }
 
               resolve({ session, user: session.user });
             } else if (sessionError) {
@@ -477,7 +488,8 @@ class ApiService {
         });
       } catch (authError) {
         console.error("❌ Desktop OAuth failed:", authError);
-        throw new Error(authError.message || "Google prijava nije uspela");
+        // Preserve original error message for better debugging
+        throw authError;
       }
     }
 
@@ -566,13 +578,24 @@ class ApiService {
 
         console.log("✅ Supabase session established");
 
-        // Link OAuth user to backend
-        await this.linkOAuthUser(data.session);
+        // Validate session data before returning
+        if (!data.session || !data.user) {
+          throw new Error("Invalid session data received from OAuth");
+        }
+
+        // Link OAuth user to backend (non-blocking - don't fail login if this fails)
+        try {
+          await this.linkOAuthUser(data.session);
+        } catch (linkError) {
+          console.error("⚠️ Failed to link OAuth user to backend (non-fatal):", linkError);
+          // Don't throw - user is authenticated in Supabase, backend will catch up on next API call
+        }
 
         return { session: data.session, user: data.user };
       } catch (authError) {
         console.error("❌ Mobile OAuth failed:", authError);
-        throw new Error(authError.message || "Google prijava nije uspela");
+        // Preserve original error message for better debugging
+        throw authError;
       }
     }
 
@@ -680,10 +703,19 @@ class ApiService {
                 "✅ Desktop Apple OAuth successful, session established"
               );
 
-              // Link OAuth user to backend
-              this.linkOAuthUser(session).catch((err) =>
-                console.error("Failed to link Apple user:", err)
-              );
+              // Validate session
+              if (!session.user) {
+                reject(new Error("Invalid session data received from OAuth"));
+                return;
+              }
+
+              // Link OAuth user to backend (non-blocking - don't fail login if this fails)
+              try {
+                await this.linkOAuthUser(session);
+              } catch (linkError) {
+                console.error("⚠️ Failed to link Apple user to backend (non-fatal):", linkError);
+                // Don't reject - user is authenticated in Supabase
+              }
 
               resolve({ session, user: session.user });
             } else if (sessionError) {
@@ -695,7 +727,8 @@ class ApiService {
         });
       } catch (authError) {
         console.error("❌ Desktop Apple Sign-In failed:", authError);
-        throw new Error(authError.message || "Apple prijava nije uspela");
+        // Preserve original error message for better debugging
+        throw authError;
       }
     }
 
@@ -769,13 +802,24 @@ class ApiService {
 
         console.log("✅ Supabase session established");
 
-        // Link OAuth user to backend
-        await this.linkOAuthUser(data.session);
+        // Validate session data before returning
+        if (!data.session || !data.user) {
+          throw new Error("Invalid session data received from OAuth");
+        }
+
+        // Link OAuth user to backend (non-blocking - don't fail login if this fails)
+        try {
+          await this.linkOAuthUser(data.session);
+        } catch (linkError) {
+          console.error("⚠️ Failed to link OAuth user to backend (non-fatal):", linkError);
+          // Don't throw - user is authenticated in Supabase, backend will catch up on next API call
+        }
 
         return { session: data.session, user: data.user };
       } catch (authError) {
         console.error("❌ iOS Apple Sign-In failed:", authError);
-        throw new Error(authError.message || "Apple prijava nije uspela");
+        // Preserve original error message for better debugging
+        throw authError;
       }
     }
 
@@ -1326,21 +1370,65 @@ class ApiService {
   }
 
   /**
-   * Process payment (placeholder)
+   * Link purchase receipt to user in RevenueCat
+   * @param {string} receiptToken - Purchase token (Android) or transaction receipt (iOS)
+   * @param {boolean} isRestore - Whether this is a restore operation
+   * @returns {Promise<Object>} Link result
    */
-  async processPayment(planId, paymentData) {
-    // Placeholder for payment processing
-    // In real implementation, this would integrate with Stripe, PayPal, etc.
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          transaction_id: `tx_${Date.now()}`,
-          plan_id: planId,
-          message: "Payment processed successfully",
-        });
-      }, 2000);
-    });
+  async linkPurchase(receiptToken, isRestore = false) {
+    try {
+      const response = await this.makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/subscription/link-purchase`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receipt_token: receiptToken,
+            is_restore: isRestore,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to link purchase");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Purchase linking error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify subscription status (calls RevenueCat API)
+   * Useful for restoring purchases or debugging
+   */
+  async verifySubscription() {
+    try {
+      const response = await this.makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/subscription/verify`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to verify subscription");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Subscription verification error:", error);
+      throw error;
+    }
   }
 
   /**

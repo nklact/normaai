@@ -21,7 +21,7 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    compileSdk = 34
+    compileSdk = 36
     namespace = "com.nikola.norma_ai"
 
     signingConfigs {
@@ -39,7 +39,7 @@ android {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.nikola.norma_ai"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
@@ -78,12 +78,17 @@ rust {
 }
 
 dependencies {
-    implementation("androidx.webkit:webkit:1.6.1")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.8.0")
+    implementation("androidx.webkit:webkit:1.11.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.core:core:1.13.1")
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("com.google.android.material:material:1.12.0")
+    // Google Play Billing for In-App Purchases
+    implementation("com.android.billingclient:billing:7.1.1")
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.4")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
 
 apply(from = "tauri.build.gradle.kts")

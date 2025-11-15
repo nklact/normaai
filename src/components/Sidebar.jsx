@@ -21,6 +21,7 @@ const Sidebar = ({
   // Authentication props
   isAuthenticated,
   userStatus,
+  onUserStatusUpdate,
   onLogin,
   onRegister,
   onLogout,
@@ -156,12 +157,28 @@ const Sidebar = ({
 
     try {
       setIsResendingVerification(true);
+
+      // First, check if email is already verified
+      const status = await apiService.getUserStatus();
+
+      if (status.email_verified) {
+        // Email is already verified - update state and hide banner
+        if (onUserStatusUpdate) {
+          onUserStatusUpdate(status);
+        }
+        setInfoMessage('Vaš email je već verifikovan! Hvala.');
+        setInfoDialogOpen(true);
+        return;
+      }
+
+      // Email not verified - send verification email
       await apiService.requestEmailVerification();
-      setInfoMessage('Verifikacioni email je ponovo poslat! Proverite inbox.');
+      const userEmail = userStatus?.email || 'vašu email adresu';
+      setInfoMessage(`Verifikacioni email je uspešno poslat na ${userEmail}. Molimo proverite svoj inbox i spam folder.`);
       setInfoDialogOpen(true);
     } catch (error) {
       console.error('Failed to resend verification email:', error);
-      setInfoMessage('Greška prilikom slanja email-a. Pokušajte ponovo.');
+      setInfoMessage('Greška prilikom slanja verifikacionog emaila. Molimo pokušajte ponovo.');
       setInfoDialogOpen(true);
     } finally {
       setIsResendingVerification(false);

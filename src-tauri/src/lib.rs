@@ -33,7 +33,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_web_auth::init()); // OAuth for mobile (custom URL schemes)
+        .plugin(tauri_plugin_web_auth::init()) // OAuth for mobile (custom URL schemes)
+        .plugin(tauri_plugin_iap::init()); // In-App Purchases for iOS and Android
 
     builder
         .setup(|_app| {

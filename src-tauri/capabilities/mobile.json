@@ -18,6 +18,13 @@
     "store:allow-load",
     "store:allow-save",
     "web-auth:default",
-    "web-auth:allow-authenticate"
+    "web-auth:allow-authenticate",
+    "iap:default",
+    "iap:allow-initialize",
+    "iap:allow-get-products",
+    "iap:allow-purchase",
+    "iap:allow-restore-purchases",
+    "iap:allow-get-purchase-history",
+    "iap:allow-acknowledge-purchase"
   ]
 }

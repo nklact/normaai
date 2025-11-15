@@ -3,6 +3,7 @@ import Modal from './Modal';
 import Icon from './Icons';
 import apiService from '../services/api';
 import './PlanSelectionModal.css'; // Reuse existing styles
+import { completeRestoreFlow, isIAPSupported, getPlatform } from '../services/subscriptions.js';
 
 const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscriptionChange }) => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -222,6 +223,45 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
     }
   };
 
+  const handleRestorePurchases = async () => {
+    if (!isIAPSupported()) {
+      alert('Vraćanje kupovina je dostupno samo na iOS i Android aplikacijama.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingMessage('Tražimo vaše prethodne kupovine...');
+
+    try {
+      const result = await completeRestoreFlow(userStatus?.id, apiService);
+
+      if (result.success) {
+        if (result.count === 0) {
+          setProcessingMessage('Nema pronađenih kupovina za vraćanje');
+        } else {
+          setProcessingMessage(`Uspešno vraćeno ${result.count} kupovina!`);
+        }
+
+        setTimeout(async () => {
+          setIsProcessing(false);
+          // Refresh user status
+          if (onSubscriptionChange) {
+            onSubscriptionChange('restored');
+          }
+          if (result.count > 0) {
+            onClose();
+          }
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Vraćanje kupovina nije uspelo');
+      }
+    } catch (error) {
+      console.error('Restore purchases error:', error);
+      setProcessingMessage(`Greška: ${error.message}`);
+      setTimeout(() => setIsProcessing(false), 3000);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -410,6 +450,16 @@ const SubscriptionManagementModal = ({ isOpen, onClose, userStatus, onSubscripti
 
             {/* Action Buttons */}
             <div className="subscription-actions">
+              {isIAPSupported() && (
+                <button
+                  className="restore-purchases-btn"
+                  onClick={handleRestorePurchases}
+                  style={{ marginRight: '10px' }}
+                >
+                  <Icon name="refresh" size={16} />
+                  Vrati kupovine
+                </button>
+              )}
               <button
                 className="cancel-subscription-btn"
                 onClick={handleCancelSubscription}

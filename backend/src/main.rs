@@ -9,6 +9,8 @@ mod contracts;
 mod cleanup;
 mod sessions;
 mod email_service;
+mod revenuecat;
+mod webhooks;
 
 use axum::{
     routing::{get, post, put, delete},
@@ -133,6 +135,8 @@ async fn main() {
         .route("/api/subscription/cancel", post(simple_auth::cancel_subscription_handler))
         .route("/api/subscription/change-plan", put(simple_auth::change_plan_handler))
         .route("/api/subscription/billing-period", put(simple_auth::change_billing_period_handler))
+        .route("/api/subscription/link-purchase", post(webhooks::link_purchase))
+        .route("/api/subscription/verify", post(webhooks::verify_subscription))
         .with_state((
             pool.clone(),
             openrouter_api_key.clone(),
@@ -159,11 +163,23 @@ async fn main() {
     let api_routes = Router::new()
         .route("/api/question", post(api::ask_question_handler))
         .route("/api/transcribe", post(api::transcribe_audio_handler))
-        .with_state((pool, openrouter_api_key, openai_api_key, jwt_secret, supabase_jwt_secret));
+        .with_state((pool.clone(), openrouter_api_key.clone(), openai_api_key, jwt_secret.clone(), supabase_jwt_secret.clone()));
 
     // Contract download route (no auth required - files are UUID-based)
     let contract_routes = Router::new()
         .route("/api/contracts/:file_id", get(contracts::download_contract_handler));
+
+    // Webhook routes (no auth - verified via signature)
+    let webhook_routes = Router::new()
+        .route("/api/webhooks/revenuecat", post(webhooks::handle_revenuecat_webhook))
+        .with_state((
+            pool,
+            openrouter_api_key,
+            jwt_secret,
+            supabase_url,
+            supabase_jwt_secret,
+            resend_api_key,
+        ));
 
     // Combine routes
     let app = Router::new()
@@ -173,6 +189,7 @@ async fn main() {
         .merge(database_routes)
         .merge(api_routes)
         .merge(contract_routes)
+        .merge(webhook_routes)
         // .layer(axum::middleware::from_fn(request_logger)) // Disabled - only enable for debugging
         .layer(cors)
         .layer(TraceLayer::new_for_http())

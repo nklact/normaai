@@ -65,7 +65,7 @@ fn get_email_template(content: &str, preheader: &str) -> String {
       text-align: center;
     }}
     .email-logo {{
-      height: 40px;
+      height: 30px;
       width: auto;
     }}
     .email-body {{

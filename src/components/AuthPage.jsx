@@ -272,40 +272,116 @@ const AuthPage = ({ onSuccess, initialTab = 'login', reason = null }) => {
   };
 
   const handleGoogleLogin = async () => {
+    // Prevent double-click
+    if (isLoading) {
+      console.log('⚠️ Google login already in progress, ignoring duplicate click');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
+    setSuccess('');
+
     try {
       const result = await apiService.signInWithGoogle();
 
-      if (result?.session) {
-        setSuccess('Uspešno ste se prijavili!');
-        setTimeout(() => {
-          onSuccess(result);
-        }, 1000);
+      // Validate result before proceeding
+      if (!result?.session) {
+        throw new Error('OAuth prijava nije vratila validnu sesiju');
       }
+
+      setSuccess('Uspešno ste se prijavili!');
+      // Immediately call onSuccess without delay for better UX
+      setTimeout(() => {
+        onSuccess(result);
+      }, 500);
     } catch (err) {
       console.error('Google login error:', err);
-      setError(err.message || 'Google prijava nije uspela');
+
+      // Check if user cancelled (common error messages for cancellation)
+      const isCancelled = err.message && (
+        err.message.includes('cancelled') ||
+        err.message.includes('canceled') ||
+        err.message.includes('User cancelled') ||
+        err.message.includes('Authentication was cancelled') ||
+        err.message.toLowerCase().includes('cancel')
+      );
+
+      // Check for network errors
+      const isNetworkError = err.message && (
+        err.message.includes('Network') ||
+        err.message.includes('network') ||
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('timeout')
+      );
+
+      // Only show error if it's not a cancellation
+      if (isCancelled) {
+        // User cancelled - just silently reset (user knows they cancelled)
+        console.log('ℹ️ User cancelled OAuth flow');
+      } else if (isNetworkError) {
+        setError('Greška u vezi. Proverite internet konekciju i pokušajte ponovo.');
+      } else {
+        setError(err.message || 'Google prijava nije uspela');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAppleLogin = async () => {
+    // Prevent double-click
+    if (isLoading) {
+      console.log('⚠️ Apple login already in progress, ignoring duplicate click');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
+    setSuccess('');
+
     try {
       const result = await apiService.signInWithApple();
 
-      if (result?.session) {
-        setSuccess('Uspešno ste se prijavili!');
-        setTimeout(() => {
-          onSuccess(result);
-        }, 1000);
+      // Validate result before proceeding
+      if (!result?.session) {
+        throw new Error('OAuth prijava nije vratila validnu sesiju');
       }
+
+      setSuccess('Uspešno ste se prijavili!');
+      // Immediately call onSuccess without delay for better UX
+      setTimeout(() => {
+        onSuccess(result);
+      }, 500);
     } catch (err) {
       console.error('Apple login error:', err);
-      setError(err.message || 'Apple prijava nije uspela');
+
+      // Check if user cancelled (common error messages for cancellation)
+      const isCancelled = err.message && (
+        err.message.includes('cancelled') ||
+        err.message.includes('canceled') ||
+        err.message.includes('User cancelled') ||
+        err.message.includes('Authentication was cancelled') ||
+        err.message.toLowerCase().includes('cancel')
+      );
+
+      // Check for network errors
+      const isNetworkError = err.message && (
+        err.message.includes('Network') ||
+        err.message.includes('network') ||
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('timeout')
+      );
+
+      // Only show error if it's not a cancellation
+      if (isCancelled) {
+        // User cancelled - just silently reset (user knows they cancelled)
+        console.log('ℹ️ User cancelled OAuth flow');
+      } else if (isNetworkError) {
+        setError('Greška u vezi. Proverite internet konekciju i pokušajte ponovo.');
+      } else {
+        setError(err.message || 'Apple prijava nije uspela');
+      }
     } finally {
       setIsLoading(false);
     }

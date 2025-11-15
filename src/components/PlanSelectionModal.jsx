@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Icon from './Icons';
 import './PlanSelectionModal.css';
+import { completePurchaseFlow, isIAPSupported, getPlatform } from '../services/subscriptions.js';
 
-const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanChange }) => {
+const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanChange, apiService }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   const [billingPeriod, setBillingPeriod] = useState('monthly'); // 'monthly' or 'yearly'
+  const [platform, setPlatform] = useState(getPlatform());
+  const [iapAvailable, setIapAvailable] = useState(isIAPSupported());
 
   // Reset billing period to monthly when modal opens
   useEffect(() => {
@@ -131,24 +134,65 @@ const PlanSelectionModal = ({ isOpen, onClose, currentPlan, userStatus, onPlanCh
       selectedBillingPeriod: billingPeriod,
       selectedPricing: selectedPlan.pricing[billingPeriod]
     };
-    
+
     try {
-      setProcessingMessage('Pokretamo proces plaćanja...');
-      // Placeholder for payment processing
-      setTimeout(async () => {
-        setProcessingMessage('Ažuriramo vaš nalog...');
-        
-        // Call the upgrade function
+      // Platform-specific payment flow
+      if (iapAvailable && (platform === 'ios' || platform === 'android')) {
+        // Mobile IAP flow
+        setProcessingMessage('Pokretamo prodavnicu...');
+
+        const result = await completePurchaseFlow(
+          planId,
+          billingPeriod,
+          userStatus?.id, // User's Supabase UUID
+          apiService
+        );
+
+        if (!result.success) {
+          if (result.cancelled) {
+            // User cancelled - just close
+            setIsProcessing(false);
+            return;
+          }
+          throw new Error(result.error || 'Plaćanje nije uspelo');
+        }
+
+        if (result.pendingValidation) {
+          alert('Kupovina uspešna! Vaša pretplata će biti aktivirana uskoro.');
+        } else {
+          setProcessingMessage('Aktiviramo vašu pretplatu...');
+        }
+
+        // Refresh user status
+        const status = await apiService.getUserStatus();
+        // Call onPlanChange to update parent component
         if (onPlanChange) {
           await onPlanChange(planId, selectedPlanData);
         }
-        
+
         setIsProcessing(false);
         onClose();
-      }, 3000);
+
+      } else {
+        // Web/Desktop placeholder (for future Stripe integration)
+        setProcessingMessage('Pokretamo proces plaćanja...');
+        alert(`Plaćanje za ${platform} platformu će uskoro biti dostupno. Molimo koristite mobilnu aplikaciju za sada.`);
+        setIsProcessing(false);
+
+        // TODO: Implement Stripe/web payment flow here
+        // For now, keep the old behavior for backwards compatibility
+        // setTimeout(async () => {
+        //   setProcessingMessage('Ažuriramo vaš nalog...');
+        //   if (onPlanChange) {
+        //     await onPlanChange(planId, selectedPlanData);
+        //   }
+        //   setIsProcessing(false);
+        //   onClose();
+        // }, 3000);
+      }
     } catch (error) {
       console.error('Plan upgrade error:', error);
-      alert('Došlo je do greške prilikom nadogradnje plana. Molimo pokušajte ponovo.');
+      alert(`Došlo je do greške prilikom nadogradnje plana: ${error.message}`);
       setIsProcessing(false);
     }
   };
