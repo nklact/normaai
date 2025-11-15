@@ -93,7 +93,8 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_origin([
             "http://localhost:1420".parse::<HeaderValue>().unwrap(), // Tauri dev
-            "https://tauri.localhost".parse::<HeaderValue>().unwrap(), // Tauri production
+            "https://tauri.localhost".parse::<HeaderValue>().unwrap(), // Tauri production (HTTPS)
+            "http://tauri.localhost".parse::<HeaderValue>().unwrap(), // Tauri production (HTTP - Android/iOS)
             "tauri://localhost".parse::<HeaderValue>().unwrap(), // Tauri custom protocol
             "https://chat.normaai.rs".parse::<HeaderValue>().unwrap(), // Production web
             "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Vite dev

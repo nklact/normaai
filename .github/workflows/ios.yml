@@ -53,6 +53,68 @@ jobs:
 
           echo "iOS project initialized"
 
+      - name: Add norma-ai-iap Swift Package dependency
+        run: |
+          cd src-tauri/gen/apple
+
+          echo "Adding norma-ai-iap Swift Package to Xcode project..."
+
+          # Install xcodeproj gem if not already installed
+          gem install xcodeproj
+
+          # Use Ruby xcodeproj gem to add local Swift Package dependency
+          ruby << 'RUBY'
+          require 'xcodeproj'
+
+          project_path = 'norma-ai.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+
+          # norma-ai-iap package details (local path relative to Xcode project)
+          package_path = '../../ios'
+          package_product_name = 'norma-ai-iap'
+
+          # Check if package already exists
+          existing_package = project.root_object.package_references.find do |pkg|
+            pkg.respond_to?(:path) && pkg.path == package_path
+          end
+
+          unless existing_package
+            puts "📦 Adding norma-ai-iap local package dependency..."
+
+            # Create local package reference
+            package_ref = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
+            package_ref.relative_path = package_path
+
+            # Add to project's package references
+            project.root_object.package_references << package_ref
+
+            # Add package product to the main app target
+            main_target = project.targets.find { |t| t.name.include?('norma-ai') && t.product_type == 'com.apple.product-type.application' }
+
+            if main_target
+              puts "✅ Found main app target: #{main_target.name}"
+
+              # Create package product dependency
+              package_product = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+              package_product.package = package_ref
+              package_product.product_name = package_product_name
+
+              # Add to target's package dependencies
+              main_target.package_product_dependencies << package_product
+
+              puts "✅ norma-ai-iap added to #{main_target.name}"
+            else
+              puts "⚠️ Warning: Could not find main app target"
+            end
+
+            project.save
+            puts "✅ norma-ai-iap package dependency added successfully"
+          else
+            puts "ℹ️ norma-ai-iap package already exists in project"
+          end
+          RUBY
+
+          echo "✅ Swift Package configuration complete"
 
       - name: Configure Xcode project for manual code signing
         env:
