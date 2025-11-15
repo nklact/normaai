@@ -16,16 +16,14 @@ let package = Package(
             targets: ["norma-ai-iap"])
     ],
     dependencies: [
-        .package(name: "Tauri", path: "../.tauri/tauri-api")
+        // No external dependencies - uses only Foundation and StoreKit (iOS system frameworks)
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "norma-ai-iap",
-            dependencies: [
-                .byName(name: "Tauri")
-            ],
+            dependencies: [],
             path: "Sources")
     ]
 )
